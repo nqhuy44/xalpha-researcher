@@ -234,7 +234,7 @@ The summarization uses a tiered model strategy to minimize cost while maximizing
 ```mermaid
 flowchart TD
     subgraph "Stage 1 — Flash-Lite ($0.10/1M input)"
-        A["282 enriched articles"] --> B{"Split into batches<br/>(15 articles/batch)"}
+        A["282 enriched articles"] --> B{"Split into batches<br/>(30 articles/batch)"}
         B --> C1["Batch 1 → Flash-Lite"]
         B --> C2["Batch 2 → Flash-Lite"]
         B --> C3["..."]
@@ -273,7 +273,7 @@ flowchart TD
 
 | Parameter | Value | Location |
 | :--- | :--- | :--- |
-| `BATCH_SIZE` | 15 articles/batch | `src/services/llm.py` |
+| `BATCH_SIZE` | 30 articles/batch | `src/services/llm.py` |
 | `content_preview` limit | 3,000 chars/article | `src/services/llm.py` |
 | Stage 1 model | `GEMINI__MODEL_LITE` | `.env` |
 | Stage 2 model | `GEMINI__MODEL_FLASH` | `.env` |
