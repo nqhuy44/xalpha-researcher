@@ -19,6 +19,12 @@ class NewsArticleDTO(BaseModel):
     source_name: str
     domain: str
     language: str = "vi"
+    
+    # State & Summarization
+    ai_summary: Optional[str] = None
+    is_summarized: bool = False
+    is_reported: bool = False
+    
     published_at: datetime
     ingested_at: datetime
 

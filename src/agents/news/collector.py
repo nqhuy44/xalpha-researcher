@@ -15,6 +15,7 @@ import structlog
 from src.config.settings import settings
 from src.data.processing.article_processor import ArticleProcessor
 from src.data.sources.rss_collector import RSSCollector
+from src.data.sources.html_scraper import HTMLScraper
 from src.data.sources.rss_registry import SourceRegistry
 from src.db.session import async_session_factory
 from src.data.persistence.news_repo import NewsRepository
@@ -50,6 +51,12 @@ class NewsCollector:
 
         # Initialize processor
         self._processor = ArticleProcessor(known_hashes=known_hashes)
+        
+        # Initialize full-text scraper
+        self._html_scraper = HTMLScraper(
+            timeout=timeout or settings.news.fetch_timeout,
+            max_concurrent=max_concurrent or settings.news.max_concurrent,
+        )
 
     @property
     def registry(self) -> SourceRegistry:
@@ -143,6 +150,11 @@ class NewsCollector:
             failed=failed,
             duration_s=collection_result.duration_seconds,
         )
+
+        # HTML Full-text Enrichment
+        # We fetch full html text ONLY for the articles that survived deduplication above to save network requests and tokens.
+        if processing_result.articles:
+            processing_result.articles = await self._html_scraper.enrich_articles(processing_result.articles)
 
         # Persistence
         if collection_result.articles and persist:

@@ -27,6 +27,7 @@ pandas = "^2.0"
 numpy = "^2.0"
 feedparser = "^6.0"
 apscheduler = "^3.10"
+trafilatura = "^2.0.0"
 
 # Database
 asyncpg = "^0.30"
