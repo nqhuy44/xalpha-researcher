@@ -1,0 +1,484 @@
+# =============================================================================
+# xalpha-researcher — RSS Source Registry
+# =============================================================================
+# Default RSS feeds for multi-domain Vietnamese news collection.
+# Each source has: name, url, domain, language, enabled, priority.
+#
+# Domains: finance, geopolitics, law, tech, macro, general, real_estate, banking
+# Priority: 1 (highest) to 5 (lowest)
+# Enabled: true/false to toggle sources without removing them
+#
+# To add a new source, append to the list below.
+# To disable a source, set enabled: false.
+# =============================================================================
+
+sources:
+  # ---------------------------------------------------------------------------
+  # VnExpress — Largest Vietnamese news portal
+  # ---------------------------------------------------------------------------
+  - name: "VnExpress - Kinh Doanh"
+    url: "https://vnexpress.net/rss/kinh-doanh.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "VnExpress - Thế Giới"
+    url: "https://vnexpress.net/rss/the-gioi.rss"
+    domain: "geopolitics"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "VnExpress - Pháp Luật"
+    url: "https://vnexpress.net/rss/phap-luat.rss"
+    domain: "law"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "VnExpress - Khoa Học Công Nghệ"
+    url: "https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss"
+    domain: "tech"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnExpress - Tin Mới Nhất"
+    url: "https://vnexpress.net/rss/tin-moi-nhat.rss"
+    domain: "general"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnExpress - Bất Động Sản"
+    url: "https://vnexpress.net/rss/bat-dong-san.rss"
+    domain: "real_estate"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnExpress - Thời sự"
+    url: "https://vnexpress.net/rss/thoi-su.rss"
+    domain: "general"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  # ---------------------------------------------------------------------------
+  # CafeF & CafeBiz — Leading Vietnamese financial & business news
+  # ---------------------------------------------------------------------------
+  - name: "CafeF - Vĩ Mô"
+    url: "https://cafebiz.vn/rss/vi-mo.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "CafeF - Bất động sản"
+    url: "https://cafebiz.vn/rss/bat-dong-san.rss"
+    domain: "real_estate"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "CafeF - Chứng khoán"
+    url: "https://cafef.vn/rss/chung-khoan.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "CafeF - Tài chính"
+    url: "https://cafebiz.vn/rss/bizmoney.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "CafeF - Công nghệ"
+    url: "https://cafebiz.vn/rss/cong-nghe.rss"
+    domain: "tech"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "CafeF - Kinh doanh"
+    url: "https://cafebiz.vn/rss/cau-chuyen-kinh-doanh.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  - name: "CafeF - Tư nhân"
+    url: "https://cafebiz.vn/rss/suc-bat-tu-nhan.rss"
+    domain: "general"
+    language: "vi"
+    enabled: true
+    priority: 1
+
+  # ---------------------------------------------------------------------------
+  # Tuổi Trẻ — Major Vietnamese newspaper
+  # ---------------------------------------------------------------------------
+  - name: "Tuổi Trẻ - Kinh Doanh"
+    url: "https://tuoitre.vn/rss/kinh-doanh.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Tuổi Trẻ - Thế Giới"
+    url: "https://tuoitre.vn/rss/the-gioi.rss"
+    domain: "geopolitics"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Tuổi Trẻ - Pháp Luật"
+    url: "https://tuoitre.vn/rss/phap-luat.rss"
+    domain: "law"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Tuổi Trẻ - Công Nghệ"
+    url: "https://tuoitre.vn/rss/cong-nghe.rss"
+    domain: "tech"
+    language: "vi"
+    enabled: true
+    priority: 3
+
+  - name: "Tuổi Trẻ - Thời sự"
+    url: "https://tuoitre.vn/rss/thoi-su.rss"
+    domain: "general"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  # ---------------------------------------------------------------------------
+  # Vietstock — Financial database and news
+  # ---------------------------------------------------------------------------
+  - name: "Vietstock - Cổ phiếu"
+    url: "https://vietstock.vn/rss/chung-khoan/co-phieu.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Giao dịch nội bộ"
+    url: "https://vietstock.vn/rss/chung-khoan/giao-dich-noi-bo.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Niêm yết"
+    url: "https://vietstock.vn/rss/chung-khoan/niem-yet.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Ý kiến chuyên gia"
+    url: "https://vietstock.vn/rss/chung-khoan/y-kien-chuyen-gia.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Chính sách"
+    url: "https://vietstock.vn/rss/chung-khoan/chinh-sach.rss"
+    domain: "law"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Thị trường trái phiếu"
+    url: "https://vietstock.vn/785/chung-khoan/thi-truong-trai-phieu.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Hoạt động kinh doanh"
+    url: "https://vietstock.vn/737/doanh-nghiep/hoat-dong-kinh-doanh.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Cổ tức"
+    url: "https://vietstock.vn/738/doanh-nghiep/co-tuc.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Tăng vốn M&A"
+    url: "https://vietstock.vn/764/doanh-nghiep/tang-von-m-a.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - IPO Cổ phần hóa"
+    url: "https://vietstock.vn/746/doanh-nghiep/ipo-co-phan-hoa.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Trái phiếu doanh nghiệp"
+    url: "https://vietstock.vn/3118/doanh-nghiep/trai-phieu-doanh-nghiep.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Nhà đất"
+    url: "https://vietstock.vn/4220//bat-dong-san/thi-truong-nha-dat.rss"
+    domain: "real_estate"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Quy hoạch hạ tầng"
+    url: "https://vietstock.vn/42221/bat-dong-san/quy-hoach-ha-tang.rss"
+    domain: "real_estate"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Dự án BĐS"
+    url: "https://vietstock.vn/4222/bat-dong-san/du-an.rss"
+    domain: "real_estate"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Thuế nhà đất"  
+    url: "https://vietstock.vn/4266/bat-dong-san/bao-hiem-va-thue-nha-dat.rss"
+    domain: "real_estate"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Vàng & Kim loại quý"
+    url: "https://vietstock.vn/759/hang-hoa/vang-va-kim-loai-quy.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Nhiên liệu"
+    url: "https://vietstock.vn/34/hang-hoa/nhien-lieu.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Kim loại"
+    url: "https://vietstock.vn/742/hang-hoa/kim-loai.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Nông sản"
+    url: "https://vietstock.vn/118/hang-hoa/nong-san-thuc-pham.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Ngân hàng"
+    url: "https://vietstock.vn/757/tai-chinh/ngan-hang.rss"
+    domain: "banking"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Bảo hiểm"
+    url: "https://vietstock.vn/3113/tai-chinh/bao-hiem.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Thuế & Ngân sách"
+    url: "https://vietstock.vn/758/tai-chinh/thue-va-ngan-sach.rss"
+    domain: "law"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Tài sản số"
+    url: "https://vietstock.vn/16312/tai-chinh/tai-san-so.rss"
+    domain: "tech"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Vĩ mô VN"
+    url: "https://vietstock.vn/761/kinh-te/vi-mo.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Kinh tế đầu tư"
+    url: "https://vietstock.vn/768/kinh-te/kinh-te-dau-tu.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Chứng khoán thế giới"
+    url: "https://vietstock.vn/773/the-gioi/chung-khoan-the-gioi.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Tiền kỹ thuật số"
+    url: "https://vietstock.vn/4309/the-gioi/tien-ky-thuat-so.rss"
+    domain: "tech"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Tài chính quốc tế"
+    url: "https://vietstock.vn/772/the-gioi/tai-chinh-quoc-te.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Kinh tế ngành Thế giới"
+    url: "https://vietstock.vn/775/the-gioi/kinh-te-nganh.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Đông Dương Vĩ mô"
+    url: "https://vietstock.vn/1326/dong-duong/vi-mo-dau-tu.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Đông Dương Ngân hàng"
+    url: "https://vietstock.vn/1327/dong-duong/tai-chinh-ngan-hang.rss"
+    domain: "banking"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Đông Dương Chứng khoán"
+    url: "https://vietstock.vn/1328/dong-duong/thi-truong-chung-khoan.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "Vietstock - Đông Dương Kinh tế ngành"
+    url: "https://vietstock.vn/1329/dong-duong/kinh-te-nganh.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  # ---------------------------------------------------------------------------
+  # VnEconomy — Economic news
+  # ---------------------------------------------------------------------------
+  - name: "VnEconomy - Tiêu điểm"
+    url: "https://vneconomy.vn/tieu-diem.rss"
+    domain: "general"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Chứng khoán"
+    url: "https://vneconomy.vn/chung-khoan.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Đầu tư hạ tầng"
+    url: "https://vneconomy.vn/dau-tu-ha-tang.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Thị trường"
+    url: "https://vneconomy.vn/thi-truong.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Doanh nghiệp"
+    url: "https://vneconomy.vn/nhip-cau-doanh-nghiep.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Tiêu dùng"
+    url: "https://vneconomy.vn/tieu_dung.rss"
+    domain: "general"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Đầu tư"
+    url: "https://vneconomy.vn/dau-tu.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Kinh tế thế giới"
+    url: "https://vneconomy.vn/kinh-te-the-gioi.rss"
+    domain: "geopolitics"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Địa ốc"
+    url: "https://vneconomy.vn/dia-oc.rss"
+    domain: "real_estate"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Kinh tế số"
+    url: "https://vneconomy.vn/kinh-te-so.rss"
+    domain: "tech"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Tài chính"
+    url: "https://vneconomy.vn/tai-chinh.rss"
+    domain: "finance"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Kinh tế xanh"
+    url: "https://vneconomy.vn/kinh-te-xanh.rss"
+    domain: "macro"
+    language: "vi"
+    enabled: true
+    priority: 2
+
+  - name: "VnEconomy - Công nghệ"
+    url: "https://vneconomy.vn/cong-nghe-startup.rss"
+    domain: "tech"
+    language: "vi"
+    enabled: true
+    priority: 2

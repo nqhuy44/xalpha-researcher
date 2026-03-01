@@ -1,0 +1,136 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: xalpha-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES__PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES__DB:-xalpha}
+      POSTGRES_USER: ${POSTGRES__USER:-xalpha}
+      POSTGRES_PASSWORD: ${POSTGRES__PASSWORD:-xalpha_dev}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES__USER:-xalpha}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:8-alpine
+    container_name: xalpha-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS__PORT:-6379}:6379"
+    command: redis-server --requirepass ${REDIS__PASSWORD:-xalpha_dev}
+    volumes:
+      - ./redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS__PASSWORD:-xalpha_dev}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  migrator:
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-migrator
+    command: alembic upgrade head
+    env_file: .env
+    environment:
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  telegram-bot: 
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-telegram-bot
+    restart: unless-stopped
+    command: python -m src.interfaces.telegram.bot
+    env_file: .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      # Override the DB host to the postgres container inside the docker network
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  news-scheduler:
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-news-scheduler
+    restart: unless-stopped
+    command: python scripts/run_scheduler.py
+    env_file: .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      # Override DB / Cache routing
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
