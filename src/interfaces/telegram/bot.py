@@ -99,6 +99,9 @@ class TelegramBot:
         """Trigger news collection, Gemini summarization, and reply."""
         from src.agents.news.collector import NewsCollector
         from src.services.llm import GeminiService
+        from src.db.session import async_session_factory
+        from src.data.persistence.news_repo import NewsRepository
+        from src.models.news import NewsArticleDTO
 
         await self._safe_reply(
             update, "Đang kích hoạt quy trình thu thập dữ liệu. Quá trình này mất khoảng 1-2 phút."
@@ -117,28 +120,88 @@ class TelegramBot:
             )
             return
 
-        if result.total_after_dedup == 0:
-            summary_topics = ["Không có bản ghi dữ liệu mới nào so với chu kỳ trước."]
-            await self._safe_reply(update, summary_topics[0])
-            return
-            
-        await self._safe_reply(update, "Dữ liệu đã thu thập. Đang phân tích và tổng hợp...")
-        llm = GeminiService()
-        summary_topics = await llm.summarize_news_batch(result.articles)
-
         # Meta report message
         meta_msg = (
             "*Báo Cáo Thu Thập Dữ Liệu*\n\n"
-            f"- Bản ghi truy xuất: {result.total_fetched}\n"
-            f"- Bản ghi lưu mới: {result.total_after_dedup}\n"
+            f"- Bản ghi truy xuất từ RSS: {result.total_fetched}\n"
+            f"- Bản ghi mới tải về: {result.total_after_dedup}\n"
         )
-        # Gửi từng chủ đề trực tiếp cho người dùng yêu cầu
         user_chat_id = update.effective_chat.id
         await self.send_message(meta_msg, chat_id=user_chat_id)
 
-        # Gửi từng chủ đề riêng biệt
-        for topic_msg in summary_topics:
-            await self.send_message(topic_msg, chat_id=user_chat_id)
+        try:
+            async with async_session_factory() as session:
+                repo = NewsRepository(session)
+                
+                # Process queue in batches grouped by domain
+                batch_count = 0
+                while True:
+                    unreported = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
+                    if not unreported:
+                        if batch_count == 0:
+                            await self._safe_reply(update, "Không có bản ghi dữ liệu mới nào chưa được báo cáo.")
+                        return
+                        
+                    domain_map = {
+                        "macro": "Kinh tế vĩ mô",
+                        "finance": "Tài chính & Kinh doanh",
+                        "geopolitics": "Địa chính trị & Thế giới",
+                        "tech": "Công nghệ số",
+                        "law": "Pháp luật & Chính sách",
+                        "real_estate": "Bất động sản",
+                        "banking": "Ngân hàng",
+                        "general": "Tin tức chung"
+                    }
+                    current_domain = unreported[0].domain
+                    topic_name = domain_map.get(current_domain, current_domain.capitalize())
+                    
+                    batch_count += 1
+                    if batch_count == 1:
+                        await self._safe_reply(update, f"Đang xử lý tổng hợp dữ liệu... Tiến trình này có thể mất vài phút.")
+                    llm = GeminiService()
+                    
+                    # Stage 1: Batch Summarization
+                    unsummarized = [a for a in unreported if not a.is_summarized]
+                    if unsummarized:
+                        dtos = [
+                            NewsArticleDTO(
+                                article_id=str(a.id),
+                                content_hash=a.content_hash,
+                                url=a.url,
+                                title=a.title,
+                                content=a.content,
+                                source_name=a.source_name,
+                                domain=a.domain,
+                                description=a.description,
+                                published_at=a.published_at,
+                                ingested_at=a.ingested_at,
+                            ) for a in unsummarized
+                        ]
+                        summary_updates = await llm.generate_article_summaries(dtos)
+                        if summary_updates:
+                            await repo.update_summaries(summary_updates)
+                            
+                            # Fetch again to get updated ai_summaries
+                            unreported_updated = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
+                            unreported = [u for u in unreported_updated if u.domain == current_domain]
+                    
+                    # Stage 2: Synthesis
+                    summaries_texts = [a.ai_summary for a in unreported if a.ai_summary]
+                    
+                    if summaries_texts:
+                        summary_topics = await llm.synthesize_reports(summaries_texts)
+                        
+                        # Gửi từng chủ đề riêng biệt
+                        for topic_msg in summary_topics:
+                            await self.send_message(f"📌 **[{topic_name.upper()}]**\n{topic_msg}", chat_id=user_chat_id)
+                            
+                    # Mark as reported regardless of summary success to prevent infinite loops
+                    article_ids = [str(a.id) for a in unreported]
+                    await repo.mark_as_reported(article_ids)
+                        
+        except Exception as e:
+            logger.error("news_llm_processing_failed", error=str(e), exc_info=True)
+            await self._safe_reply(update, "⚠️ *Lỗi xử lý AI.*\nHệ thống không thể tổng hợp tin tức lúc này.")
 
     async def _safe_reply(self, update: Update, text: str, parse_mode: str | None = None):
         """Helper to reply to a message while handling length limits and parsing errors."""

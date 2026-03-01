@@ -71,6 +71,61 @@ class NewsRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_unreported_articles_by_domain(self, limit_per_domain: int = 50) -> List[NewsArticle]:
+        """Fetch a batch of unreported articles belonging to a specific domain.
+        This groups articles together so the LLM synthesis phase receives contextual batches.
+        """
+        # Step 1: Find one domain that has unreported articles
+        domain_stmt = (
+            select(NewsArticle.domain)
+            .where(NewsArticle.is_reported == False)
+            .limit(1)
+        )
+        domain_res = await self.session.execute(domain_stmt)
+        target_domain = domain_res.scalar_one_or_none()
+
+        if not target_domain:
+            return []
+
+        # Step 2: Fetch all unreported articles for that specific domain
+        stmt = (
+            select(NewsArticle)
+            .where(NewsArticle.is_reported == False)
+            .where(NewsArticle.domain == target_domain)
+            .order_by(NewsArticle.published_at.desc())
+            .limit(limit_per_domain)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def update_summaries(self, updates: List[tuple[str, str]]) -> None:
+        """
+        Bulk update ai_summary for a list of articles.
+        Takes a list of tuples: (article_id, summary_text)
+        """
+        from sqlalchemy import update
+        for article_id, ai_summary in updates:
+            stmt = (
+                update(NewsArticle)
+                .where(NewsArticle.id == article_id)
+                .values(ai_summary=ai_summary, is_summarized=True)
+            )
+            await self.session.execute(stmt)
+        await self.session.commit()
+
+    async def mark_as_reported(self, article_ids: List[str]) -> None:
+        """Mark a batch of articles as reported."""
+        from sqlalchemy import update
+        if not article_ids:
+            return
+        stmt = (
+            update(NewsArticle)
+            .where(NewsArticle.id.in_(article_ids))
+            .values(is_reported=True)
+        )
+        await self.session.execute(stmt)
+        await self.session.commit()
+
     async def delete_older_than(self, days: int) -> int:
         """Cleanup old articles to save space (archive policy)."""
         # (Placeholder for future use in scheduler cleanup tasks)

@@ -31,6 +31,11 @@ class NewsArticle(Base):
     domain: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     language: Mapped[str] = mapped_column(String(10), default="vi")
     
+    # State & Summarization
+    ai_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_summarized: Mapped[bool] = mapped_column(default=False, index=True)
+    is_reported: Mapped[bool] = mapped_column(default=False, index=True)
+    
     # Vector column will be added in Phase 2 for RAG
     # embedding: Mapped[Optional[Vector]] = mapped_column(Null, nullable=True)
 
@@ -43,3 +48,4 @@ class NewsArticle(Base):
 
 # Explicit indices for optimized querying
 Index("idx_news_published_domain", NewsArticle.published_at.desc(), NewsArticle.domain)
+Index("idx_news_unreported", NewsArticle.is_reported, NewsArticle.published_at.desc())

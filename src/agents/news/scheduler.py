@@ -11,6 +11,9 @@ from apscheduler.triggers.cron import CronTrigger
 from src.agents.news.collector import NewsCollector
 from src.services.llm import GeminiService
 from src.config.settings import settings
+from src.db.session import async_session_factory
+from src.data.persistence.news_repo import NewsRepository
+from src.models.news import NewsArticleDTO
 
 logger = structlog.get_logger(__name__)
 
@@ -56,32 +59,84 @@ class NewsScheduler:
         """Standard collection task for the scheduler."""
         logger.info("scheduled_task_starting", task="Full News Collection")
         try:
+            # 1. Fetch new raw articles and persist to DB
             result = await self.collector.collect(hours_ago=12, persist=True)
-
-            if result.total_after_dedup == 0:
-                summary_topics = ["Không có bản ghi dữ liệu mới nào được phát hiện."]
-            else:
-                llm = GeminiService()
-                summary_topics = await llm.summarize_news_batch(result.articles)
-
-            final_msg = (
-                "*Báo Cáo Thu Thập Dữ Liệu Tự Động*\n\n"
-                f"- Nguồn tin khả dụng: {result.sources_succeeded}/{result.sources_succeeded + result.sources_failed}\n"
-                f"- Số lượng bản ghi mới: {result.total_after_dedup}\n\n"
-            )
-            await _notify_telegram(final_msg)
             
-            for topic in summary_topics:
-                await _notify_telegram(topic)
+            async with async_session_factory() as session:
+                repo = NewsRepository(session)
+                
+                # 2. Fetch queue of unreported articles in batches grouped by domain
+                while True:
+                    unreported = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
+                    if not unreported:
+                        break
+                        
+                    current_domain = unreported[0].domain
+                    
+                    # 3. Stage 1: Summarization (Flash-Lite)
+                    unsummarized = [a for a in unreported if not a.is_summarized]
+                    if unsummarized:
+                        llm = GeminiService()
+                        dtos = [
+                            NewsArticleDTO(
+                                article_id=str(a.id),
+                                content_hash=a.content_hash,
+                                url=a.url,
+                                title=a.title,
+                                content=a.content,
+                                source_name=a.source_name,
+                                domain=a.domain,
+                                description=a.description,
+                                published_at=a.published_at,
+                                ingested_at=a.ingested_at,
+                            ) for a in unsummarized
+                        ]
+                        # Generate and save summaries
+                        summary_updates = await llm.generate_article_summaries(dtos)
+                        if summary_updates:
+                            await repo.update_summaries(summary_updates)
+                            
+                            # Refresh the queue to get the new ai_summaries for this domain
+                            # We can just fetch again because it pulls chronologically un-reported
+                            unreported_updated = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
+                            # Safety check exactly for the domain we are currently pinning
+                            unreported = [u for u in unreported_updated if u.domain == current_domain]
 
-            logger.info(
-                "scheduled_task_complete",
-                succeeded=result.sources_succeeded,
-                failed=result.sources_failed,
-                articles=result.total_after_dedup,
-            )
+                    # 4. Stage 2: Synthesis & Reporting (Flash)
+                    summaries_texts = [a.ai_summary for a in unreported if a.ai_summary]
+                    
+                    if summaries_texts:
+                        llm = GeminiService()
+                        summary_topics = await llm.synthesize_reports(summaries_texts)
+                        
+                        domain_map = {
+                            "macro": "Kinh tế vĩ mô",
+                            "finance": "Tài chính & Kinh doanh",
+                            "geopolitics": "Địa chính trị & Thế giới",
+                            "tech": "Công nghệ số",
+                            "law": "Pháp luật & Chính sách",
+                            "real_estate": "Bất động sản",
+                            "banking": "Ngân hàng",
+                            "general": "Tin tức chung"
+                        }
+                        topic_name = domain_map.get(current_domain, current_domain.capitalize())
+                        
+                        final_msg = (
+                            f"*Báo Cáo Thu Thập Dữ Liệu Tự Động (Chủ đề: {topic_name})*\n\n"
+                            f"- Tin tức trong batch báo cáo: {len(unreported)}\n"
+                        )
+                        await _notify_telegram(final_msg)
+                        
+                        for topic in summary_topics:
+                            await _notify_telegram(f"📌 **[{topic_name.upper()}]**\n{topic}")
+                            
+                    # 5. Mark as reported regardless of summary success
+                    article_ids = [str(a.id) for a in unreported]
+                    await repo.mark_as_reported(article_ids)
+
+            logger.info("scheduled_task_complete")
         except Exception as e:
-            logger.error("scheduled_task_failed", error=str(e))
+            logger.error("scheduled_task_failed", error=str(e), exc_info=True)
 
     def start(self):
         """Configure jobs based on settings and start the scheduler."""

@@ -261,7 +261,7 @@ class TestArticleProcessor:
         article = result.articles[0]
         assert "<" not in article.title
         assert "Bold Title" in article.title
-        assert "<" not in article.summary
+        assert "<" not in article.description
 
     def test_html_entity_unescape(self) -> None:
         """Unescape HTML entities."""
