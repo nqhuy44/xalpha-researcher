@@ -21,7 +21,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from src.db.base import Base
-import src.db.models.news  # Ensure models are registered
+import src.db.models.news
+import src.db.models.finance  # Ensure models are registered
 from src.config.settings import settings
 
 # add your model's MetaData object here

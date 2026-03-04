@@ -1,4 +1,7 @@
 services:
+  # ==========================================================================
+  # Infrastructure
+  # ==========================================================================
   postgres:
     image: pgvector/pgvector:pg16
     container_name: xalpha-postgres
@@ -52,6 +55,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ==========================================================================
+  # Init Container: DB Migration (runs once, then exits)
+  # ==========================================================================
   # migrator:
   #   image: nqh44/xalpha-researcher:${VERSION:-latest}
   #   container_name: xalpha-migrator
@@ -74,15 +80,19 @@ services:
   #       max-size: "10m"
   #       max-file: "3"
 
-  # telegram-bot: 
+  # ==========================================================================
+  # Application Services (each runs independently)
+  # ==========================================================================
+
+  # Telegram Bot: Receives user commands, serves queries
+  # telegram-bot:
   #   image: nqh44/xalpha-researcher:${VERSION:-latest}
   #   container_name: xalpha-telegram-bot
   #   restart: unless-stopped
-  #   command: python -m src.interfaces.telegram.bot
+  #   command: ["python", "-m", "src.interfaces.telegram.bot"]
   #   env_file: .env
   #   environment:
   #     - TZ=Asia/Ho_Chi_Minh
-  #     # Override the DB host to the postgres container inside the docker network
   #     - POSTGRES__HOST=postgres
   #     - POSTGRES__PORT=5432
   #     - REDIS__HOST=redis
@@ -105,15 +115,46 @@ services:
   #       max-size: "10m"
   #       max-file: "3"
 
+  # Financial Worker: Daily stock data sync (EOD, Profiles, Reports, Market Intelligence)
+  # financial-worker:
+  #   image: nqh44/xalpha-researcher:${VERSION:-latest}
+  #   container_name: xalpha-financial-worker
+  #   restart: unless-stopped
+  #   command: ["python", "-m", "src.agents.financial.worker"]
+  #   env_file: .env
+  #   environment:
+  #     - TZ=Asia/Ho_Chi_Minh
+  #     - POSTGRES__HOST=postgres
+  #     - POSTGRES__PORT=5432
+  #     - REDIS__HOST=redis
+  #     - REDIS__PORT=6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     migrator:
+  #       condition: service_completed_successfully
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '1.0'
+  #         memory: 512M
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+
+  # News Scheduler: Periodic news collection, LLM summarization, Telegram reporting
   # news-scheduler:
   #   image: nqh44/xalpha-researcher:${VERSION:-latest}
   #   container_name: xalpha-news-scheduler
   #   restart: unless-stopped
-  #   command: python scripts/run_scheduler.py
+  #   command: ["python", "-m", "src.agents.news.scheduler"]
   #   env_file: .env
   #   environment:
   #     - TZ=Asia/Ho_Chi_Minh
-  #     # Override DB / Cache routing
   #     - POSTGRES__HOST=postgres
   #     - POSTGRES__PORT=5432
   #     - REDIS__HOST=redis

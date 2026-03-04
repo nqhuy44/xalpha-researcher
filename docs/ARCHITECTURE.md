@@ -2,90 +2,115 @@
 
 ## Overview
 
-xalpha-researcher is a **Multi-Agent System (MAS)** for personalized Vietnamese stock market analysis. It uses 4 specialized AI agents orchestrated via LangGraph, backed by a multi-tier data infrastructure.
+xalpha-researcher is a **Multi-Agent System (MAS)** for personalized Vietnamese stock market analysis. It follows a microservice-oriented design where each agent runs as an independent process/container, sharing a common PostgreSQL database.
 
-## High-Level Architecture
+## High-Level Architecture (Current State)
 
 ```mermaid
 graph TB
     subgraph "Data Ingestion Layer"
-        DS[Data Sources<br/>vnstock, RSS, APIs]
-        DQ[Data Quality Gate<br/>Reject if < 8/12 indicators]
+        VS[vnstock API<br/>Bronze Tier]
+        RSS[RSS Feeds<br/>65 Vietnamese News Sources]
+        FM[FMarket API<br/>Mutual Funds]
+        MSN[MSN Finance<br/>Gold, FX, Commodities]
     end
 
-    subgraph "Agent Layer (LangGraph Orchestration)"
-        NA[News Agent<br/>PhoBERT Sentiment]
-        SA[Signal Agent<br/>CANSLIM + Technical]
-        DA[Debate Agent<br/>Bull vs Bear]
-        PA[Portfolio Agent<br/>Kelly + VaR]
+    subgraph "Agent Layer (Implemented)"
+        NA["News Agent<br/>Collector + Scheduler<br/>LLM Summarization"]
+        FA["Financial Agent<br/>Collector + Worker<br/>EOD, Profile, Reports"]
     end
 
-    subgraph "LLM Layer (Model Routing)"
-        PRO[Gemini 2.5 Pro<br/>Complex reasoning]
-        FLASH[Gemini 2.5 Flash<br/>Real-time tasks]
-        LITE[Gemini 2.5 Flash-Lite<br/>High-volume extraction]
+    subgraph "Agent Layer (Planned)"
+        SA["Signal Agent<br/>CANSLIM + Technical"]
+        DA["Debate Agent<br/>Bull vs Bear"]
+        PA["Portfolio Agent<br/>Kelly + VaR"]
+    end
+
+    subgraph "LLM Layer"
+        FLASH["Gemini 2.0 Flash<br/>News synthesis"]
+        LITE["Gemini 1.5 Flash-Lite<br/>Batch summarization"]
     end
 
     subgraph "Data Layer"
-        PG[(PostgreSQL + pgvector<br/>Source of Truth + Embeddings)]
-        RD[(Redis<br/>Cache + Real-time)]
-        S3[(S3<br/>Reports + Logs)]
+        PG[("PostgreSQL 16 + pgvector<br/>Source of Truth")]
+        RD[("Redis 8<br/>Cache")]
     end
 
     subgraph "Interface Layer"
-        TG[Telegram Bot<br/>Alerts & Conversation]
-        DB[Dashboard<br/>React + Vite + Charts]
+        TG["Telegram Bot<br/>Standalone Process"]
     end
 
-    DS --> DQ --> NA & SA
-    NA --> DA
-    SA --> DA
-    DA --> PA
-    PA --> TG & DB
+    VS --> FA
+    RSS --> NA
+    FM --> FA
+    MSN --> FA
 
     NA -.-> LITE
-    SA -.-> FLASH
-    DA -.-> PRO
-    PA -.-> FLASH
+    NA -.-> FLASH
 
-    NA & SA & DA & PA <--> PG
-    NA & SA <--> RD
-    DA & PA --> S3
+    NA & FA <--> PG
+    NA --> TG
+
+    SA -.-> FA
+    SA -.-> DA
+    DA -.-> PA
+    PA -.-> TG
 ```
+
+## Deployment Architecture
+
+```mermaid
+graph LR
+    subgraph "Docker Compose"
+        PG["postgres<br/>(pgvector:pg16)"]
+        RD["redis<br/>(redis:8-alpine)"]
+        BOT["telegram-bot<br/>(python -m src.interfaces.telegram.bot)"]
+        FW["financial-worker<br/>(python -m src.agents.financial.worker)"]
+        NS["news-scheduler<br/>(python -m src.agents.news.scheduler)"]
+    end
+
+    BOT --> PG & RD
+    FW --> PG & RD
+    NS --> PG & RD
+```
+
+Each application service uses the **same Docker image** (`nqh44/xalpha-researcher`) with a different `command` override.
+
+## Component Responsibilities
+
+| Component | Directory | Status | Responsibility |
+|---|---|---|---|
+| **Config** | `src/config/` | ✅ Implemented | Pydantic-based settings from environment variables |
+| **News Agent** | `src/agents/news/` | ✅ Implemented | RSS collection, HTML scraping, LLM summarization, Telegram reporting |
+| **Financial Agent** | `src/agents/financial/` | ✅ Implemented | vnstock data sync (EOD, profiles, financials, market intelligence) |
+| **Signal Agent** | `src/agents/signal/` | 🔲 Planned | CANSLIM scoring, technical analysis |
+| **Debate Agent** | `src/agents/debate/` | 🔲 Planned | Adversarial Bull/Bear reasoning |
+| **Portfolio Agent** | `src/agents/portfolio/` | 🔲 Planned | Kelly Criterion, VaR, position sizing |
+| **Data Sources** | `src/data/sources/` | ✅ Implemented | RSS, vnstock, HTML scraper connectors |
+| **Data Persistence** | `src/data/persistence/` | ✅ Implemented | Repository pattern for all DB operations |
+| **DB Models** | `src/db/models/` | ✅ Implemented | SQLAlchemy ORM models (News, Finance, Company) |
+| **LLM Service** | `src/services/llm.py` | ✅ Implemented | Two-stage Gemini pipeline (summarize + synthesize) |
+| **Telegram Bot** | `src/interfaces/telegram/` | ✅ Implemented | Standalone polling bot with `/news`, `/status` commands |
 
 ## Design Patterns
 
 | Pattern | Usage |
 |---|---|
-| **Multi-Agent System** | 4 specialized agents with distinct roles and tools |
-| **Graph-based Orchestration** | LangGraph for state management, backtracking, and human-in-the-loop |
-| **Model Routing** | Cost-optimized LLM selection based on task complexity |
-| **RAG** | pgvector embeddings for grounding LLM responses in financial data |
-| **Adversarial Reasoning** | Bull/Bear debate to eliminate confirmation bias |
-| **Event-driven Alerts** | Tiered notification system via Telegram |
+| **Repository Pattern** | `FinancialRepository`, `NewsRepository` abstract DB operations |
+| **Worker Pattern** | `FinancialWorker`, `NewsScheduler` as independent long-running processes |
+| **Incremental Sync** | Market benchmark date comparison to fetch only missing data |
+| **Stub Insertion** | Dead/new tickers get a DB stub to prevent infinite retry loops |
+| **Two-Stage LLM** | Flash-Lite for bulk extraction, Flash for synthesis (91% cost savings vs Pro) |
+| **Graceful Degradation** | All API calls wrapped with retry + fallback to None |
 
-## Component Responsibilities
-
-| Component | Directory | Responsibility |
-|---|---|---|
-| **Config** | `src/config/` | Pydantic-based settings from environment variables |
-| **Agents** | `src/agents/` | Agent logic for News, Signal, Debate, Portfolio |
-| **Data** | `src/data/` | API connectors, ETL pipelines, data quality checks |
-| **Models** | `src/models/` | PhoBERT sentiment, XGBoost/RF quantitative models |
-| **Risk** | `src/risk/` | Kelly Criterion, VaR, position sizing |
-| **DB** | `src/db/` | PostgreSQL + pgvector, Redis clients |
-| **LLM** | `src/llm/` | Gemini integration, model router, prompt templates |
-| **Interfaces** | `src/interfaces/` | Telegram bot, web dashboard |
-
-## Data Flow
+## Data Flow (Implemented)
 
 ```
-Financial APIs → Data Quality Gate → PostgreSQL (structured)
-                                   → Redis (real-time cache)
-                                   → pgvector (embeddings)
+Financial APIs (vnstock) → FinancialCollector → FinancialRepository → PostgreSQL
+                                                                    ↓
+                                              Market Benchmark (VNINDEX) → Skip if up-to-date
 
-News/RSS → PhoBERT → Sentiment scores → Agent pipeline
-                                       → pgvector (embeddings)
-
-Agent Pipeline: News → Signal → Debate → Portfolio → Alerts
+News/RSS → NewsCollector → ArticleProcessor → NewsRepository → PostgreSQL
+                                                              ↓
+                                              LLM Pipeline → Telegram
 ```

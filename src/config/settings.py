@@ -77,6 +77,7 @@ class NewsSettings(BaseModel):
 class VnstockSettings(BaseModel):
     """Vnstock library settings."""
     api_key: str = ""
+    req_delay: float = 2.0  # Delay between requests to respect rate limits
 
 
 class AppSettings(BaseSettings):

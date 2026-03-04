@@ -29,45 +29,38 @@ erDiagram
 
     COMPANY {
         uuid id PK
-        varchar symbol UK
-        varchar name
-        varchar exchange
-        varchar sector
+        varchar ticker UK
+        varchar company_name
+        varchar short_name
         varchar industry
-        jsonb metadata
-        timestamp created_at
-        timestamp updated_at
+        varchar sector
+        float market_cap
+        jsonb shareholders
+        jsonb officers
+        timestamp last_updated
     }
 
     FINANCIAL_REPORT {
         uuid id PK
-        uuid company_id FK
+        varchar ticker FK
         varchar report_type
-        date period_end
-        jsonb balance_sheet
-        jsonb income_statement
-        jsonb cash_flow
-        float eps
-        float roe
-        float roa
-        float pe_ratio
-        float pb_ratio
-        int schema_version
-        jsonb raw_data
-        timestamp created_at
+        varchar period
+        int year
+        int quarter
+        jsonb data
+        timestamp ingested_at
     }
 
-    STOCK_PRICE {
+    STOCK_EOD {
         uuid id PK
-        uuid company_id FK
-        date trading_date
+        varchar ticker FK
+        date trade_date
         float open
         float high
         float low
         float close
         bigint volume
-        float change_pct
-        jsonb technical_indicators
+        timestamp ingested_at
     }
 
     NEWS_ARTICLE {
@@ -75,97 +68,58 @@ erDiagram
         varchar content_hash UK
         varchar url
         varchar title
-        varchar author
-        text description
         text content
+        text ai_summary
         varchar source_name
         varchar domain
-        varchar language
-        vector embedding
+        boolean is_summarized
+        boolean is_reported
         timestamp published_at
         timestamp ingested_at
     }
 
-    SENTIMENT_SCORE {
+    MUTUAL_FUND_NAV {
         uuid id PK
-        uuid article_id FK
-        uuid company_id FK
-        float score
-        varchar model_version
-        jsonb shap_values
-        timestamp created_at
+        varchar fund_code
+        float nav
+        timestamp nav_date
+        varchar source
+        timestamp ingested_at
     }
 
-    AGENT_ANALYSIS {
+    COMMODITY_PRICE {
         uuid id PK
-        uuid company_id FK
-        varchar agent_type
-        varchar signal
-        float confidence
-        jsonb canslim_scores
-        jsonb technical_scores
-        jsonb shap_breakdown
-        jsonb raw_llm_response
-        varchar model_used
-        timestamp created_at
-    }
-
-    DEBATE_RECORD {
-        uuid id PK
-        uuid analysis_id FK
-        text bull_argument
-        text bear_argument
-        text synthesis
-        float risk_score
-        varchar model_used
-        int input_tokens
-        int output_tokens
-        timestamp created_at
-    }
-
-    PORTFOLIO {
-        uuid id PK
-        varchar name
-        float total_value
-        float cash_balance
-        jsonb risk_params
-        timestamp updated_at
-    }
-
-    POSITION {
-        uuid id PK
-        uuid portfolio_id FK
-        uuid company_id FK
-        int quantity
-        float avg_cost
-        float current_value
-        float kelly_fraction
-        float var_limit
-        timestamp opened_at
-        timestamp updated_at
-    }
-
-    ALERT {
-        uuid id PK
-        uuid portfolio_id FK
-        int level
-        varchar alert_type
-        text message
-        jsonb metadata
-        boolean delivered
-        timestamp created_at
-    }
-
-    INSIDER_TRADE {
-        uuid id PK
-        uuid company_id FK
-        varchar insider_name
-        varchar insider_role
-        varchar transaction_type
-        bigint shares
+        varchar symbol
         float price
-        date transaction_date
+        varchar currency
+        timestamp price_date
+        timestamp ingested_at
     }
+
+    MARKET_INDEX_STATS {
+        uuid id PK
+        varchar index_code
+        float market_cap
+        float pe
+        float pb
+        timestamp stat_date
+        timestamp ingested_at
+    }
+
+    STOCK_TRADING_STATS {
+        uuid id PK
+        varchar ticker FK
+        date trade_date
+        bigint total_buy_vol
+        bigint total_sell_vol
+        int buy_count
+        int sell_count
+        timestamp ingested_at
+    }
+
+    COMPANY ||--o{ FINANCIAL_REPORT : has
+    COMPANY ||--o{ STOCK_EOD : has
+    COMPANY ||--o{ STOCK_TRADING_STATS : has
 ```
 
 ## Indexing Strategy

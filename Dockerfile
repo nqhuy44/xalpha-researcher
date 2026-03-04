@@ -20,9 +20,12 @@ COPY pyproject.toml poetry.lock* ./
 RUN poetry export -f requirements.txt --output requirements.txt --without dev
 
 # Create virtualenv and install dependencies
+# Note: --extra-index-url for vnstock sponsor-tier packages (vnii, vnstock_installer, etc.)
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+    --extra-index-url https://vnstocks.com/api/simple \
+    -r requirements.txt
 
 
 # ==============================================================================
@@ -50,4 +53,7 @@ ENV PYTHONPATH=/app
 ENV TZ=Asia/Ho_Chi_Minh
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "scripts/run_scheduler.py"]
+# Default: run the monolith (financial worker + news scheduler)
+# Override via docker-compose `command` for individual services.
+CMD ["python", "-m", "src.main"]
+

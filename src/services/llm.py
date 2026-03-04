@@ -130,21 +130,22 @@ class GeminiService:
             error=str(retry_state.outcome.exception())
         )
     )
-    async def synthesize_reports(self, summaries: list[str]) -> list[str]:
+    async def synthesize_reports(self, summaries: list[str]) -> str:
         """
-        Take all individual DB-stored summaries and produce a high-level topic-grouped analysis.
+        Take all individual DB-stored summaries and produce a single cohesive report.
         Uses Flash model for deeper reasoning.
+        Returns a single string (one report per domain).
         """
         if not self.client:
-            return ["Cảnh báo hệ thống: Khóa Gemini bị thiếu."]
+            return "Cảnh báo hệ thống: Khóa Gemini bị thiếu."
         if not summaries:
-            return ["Không có dữ liệu đầu vào để phân tích."]
+            return "Không có dữ liệu đầu vào để phân tích."
 
         summaries_text = "\n".join(f"- {s}" for s in summaries)
 
         prompt_template = self.load_prompt("news_synthesis.txt")
         if not prompt_template:
-            return summaries
+            return "\n".join(summaries)
 
         prompt = prompt_template.replace("{summaries_text}", summaries_text)
 
@@ -156,17 +157,11 @@ class GeminiService:
                     temperature=0.3,
                 ),
             )
-            text = str(response.text)
-
-            if "---TOPIC_SPLIT---" in text:
-                parts = [p.strip() for p in text.split("---TOPIC_SPLIT---") if p.strip()]
-                return parts
-
-            return [text]
+            return str(response.text).strip()
 
         except Exception as e:
             logger.error("stage2_synthesis_failed", error=str(e))
-            return [f"Gián đoạn quy trình tổng hợp AI. Lỗi: {str(e)}"]
+            return f"Gián đoạn quy trình tổng hợp AI. Lỗi: {str(e)}"
 
     # -------------------------------------------------------------------------
     # Public API: Stage 1 Generator
