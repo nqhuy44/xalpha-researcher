@@ -74,6 +74,12 @@ class NewsSettings(BaseModel):
         return project_root / path
 
 
+class VnstockSettings(BaseModel):
+    """Vnstock library settings."""
+    api_key: str = ""
+    req_delay: float = 2.0  # Delay between requests to respect rate limits
+
+
 class AppSettings(BaseSettings):
     """Main application settings aggregating components."""
     model_config = SettingsConfigDict(
@@ -93,6 +99,7 @@ class AppSettings(BaseSettings):
     gemini: GeminiSettings = GeminiSettings()
     news: NewsSettings = NewsSettings()
     telegram: TelegramSettings = TelegramSettings()
+    vnstock: VnstockSettings = VnstockSettings()
 
     # Auth
     jwt_secret_key: str = ""

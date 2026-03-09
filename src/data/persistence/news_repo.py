@@ -126,6 +126,37 @@ class NewsRepository:
         await self.session.execute(stmt)
         await self.session.commit()
 
+    async def get_recent_hashes(self, days: int = 7) -> set[str]:
+        """Fetch content_hash values from the last N days for pre-dedup filtering.
+        This prevents unnecessary HTML scraping of articles already in the DB.
+        """
+        from datetime import datetime, timedelta, timezone
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
+        stmt = (
+            select(NewsArticle.content_hash)
+            .where(NewsArticle.ingested_at >= cutoff)
+        )
+        result = await self.session.execute(stmt)
+        return set(result.scalars().all())
+
+    async def get_all_unreported_grouped(self, limit_per_domain: int = 500) -> dict[str, list]:
+        """Fetch ALL unreported articles, grouped by domain.
+        Returns: {domain: [NewsArticle, ...]}
+        """
+        stmt = (
+            select(NewsArticle)
+            .where(NewsArticle.is_reported == False)
+            .order_by(NewsArticle.domain, NewsArticle.published_at.desc())
+            .limit(limit_per_domain * 10)  # safety cap
+        )
+        result = await self.session.execute(stmt)
+        articles = list(result.scalars().all())
+
+        grouped: dict[str, list] = {}
+        for article in articles:
+            grouped.setdefault(article.domain, []).append(article)
+        return grouped
+
     async def delete_older_than(self, days: int) -> int:
         """Cleanup old articles to save space (archive policy)."""
         # (Placeholder for future use in scheduler cleanup tasks)

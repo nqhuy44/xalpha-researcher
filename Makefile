@@ -54,14 +54,50 @@ collect-news: ## Collect news from sources and save to DB
 telegram-bot: ## Start the Telegram Bot server
 	.venv/bin/python -m src.interfaces.telegram.bot
 
+bootstrap-financials: ## Run 10-year historical data bootstrap (Company profiles, EOD, Reports, Market Intelligence)
+	.venv/bin/python scripts/bootstrap_financials.py
+
+news-scheduler: ## Run News Scheduler standalone (collect + summarize + report)
+	.venv/bin/python -m src.agents.news.scheduler
+
+financial-worker: ## Run Financial Worker standalone (daily sync + market intelligence)
+	.venv/bin/python -m src.agents.financial.worker
+
 # ---------------------------------------------------------------------------
 # Docker (Local Infrastructure)
 # ---------------------------------------------------------------------------
 docker-up: ## Start local infrastructure (PostgreSQL, Redis)
+	docker compose up -d postgres redis
+
+docker-down: ## Stop all containers
+	docker compose down
+
+# ---------------------------------------------------------------------------
+# Docker Deployment (Production)
+# ---------------------------------------------------------------------------
+docker-build: ## Build the application Docker image
+	docker compose build
+
+deploy: ## Deploy ALL services (infra + app)
 	docker compose up -d
 
-docker-down: ## Stop local infrastructure
-	docker compose down
+deploy-infra: ## Deploy infrastructure only (PostgreSQL, Redis)
+	docker compose up -d postgres redis
+
+deploy-bot: ## Deploy Telegram Bot only
+	docker compose up -d telegram-bot
+
+deploy-financial: ## Deploy Financial Worker only
+	docker compose up -d financial-worker
+
+deploy-news: ## Deploy News Scheduler only
+	docker compose up -d news-scheduler
+
+deploy-workers: ## Deploy all workers (financial + news), no bot
+	docker compose up -d financial-worker news-scheduler
+
+docker-logs: ## View all service logs
+	docker compose logs -f
 
 # ---------------------------------------------------------------------------
 # Database Migrations (Alembic)

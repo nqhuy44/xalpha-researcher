@@ -279,3 +279,77 @@ flowchart TD
 | Stage 2 model | `GEMINI__MODEL_FLASH` | `.env` |
 | Stage 1 prompt | `src/prompts/news_batch_summarize.txt` | Flash-Lite optimized |
 | Stage 2 prompt | `src/prompts/news_synthesis.txt` | Lena persona, topic grouping |
+
+## 7. Financial Data Synchronization Flow
+
+Detailed implementation of how the Financial Agent collects, validates, and persists
+stock market data using an intelligent incremental sync strategy.
+
+### 7.1 Bootstrap vs Incremental Decision
+
+```mermaid
+flowchart TD
+    START["FinancialWorker.run_daily_sync()"] --> CHECK{"companies table<br/>empty?"}
+    CHECK -->|Yes| BOOT["bootstrap_all_market()<br/>10-year deep fetch since 2015"]
+    CHECK -->|No| INC["sync_all_market()<br/>Incremental sync"]
+
+    INC --> BENCH["_get_market_latest_date()<br/>Query VNINDEX for actual latest trading day"]
+    BENCH --> BULK["Bulk DB Query:<br/>get_all_latest_eod_dates()<br/>get_all_companies_last_updated()"]
+
+    BULK --> LOOP{"For each ticker"}
+    LOOP -->|"No profile or stale > 7d"| FULL["FULL sync<br/>(Profile + Financials + EOD)"]
+    LOOP -->|"EOD < market_date"| EOD["EOD-only sync<br/>(1 API call, exact gap fill)"]
+    LOOP -->|"EOD >= market_date"| SKIP["SKIP<br/>(0 API calls)"]
+
+    FULL --> API["vnstock API<br/>(sleep 2s between calls)"]
+    EOD --> API
+    API --> DB["PostgreSQL<br/>Upsert + Commit"]
+```
+
+### 7.2 Stub Mechanism for Dead/New Tickers
+
+```mermaid
+flowchart LR
+    FETCH["get_company_profile(VVS)"] -->|API returns None| STUB["Insert stub:<br/>{ticker: VVS, last_updated: now()}"]
+    STUB --> SKIP_7D["Skipped for 7 days<br/>(last_updated check)"]
+    SKIP_7D --> RETRY["After 7 days:<br/>Retry profile fetch"]
+
+    FETCH -->|API returns data| FULL["Full upsert:<br/>Profile + Shareholders + Officers"]
+    FULL --> SYNC["Continue to Financials + EOD"]
+```
+
+### 7.3 Key Design Decisions
+
+| Decision | Rationale |
+| :--- | :--- |
+| **Market benchmark date** (not `today`) | Prevents re-syncing 800 tickers when API hasn't published today's candle yet (weekends, holidays, after-hours) |
+| **Single bulk DB query** | One `SELECT MAX(trade_date) GROUP BY ticker` instead of 800 individual queries |
+| **`from_date` passed to `sync_eod`** | Eliminates redundant per-ticker DB lookup inside `sync_eod` |
+| **Sleep only after real API calls** | Skipped tickers don't waste 2s of rate-limit delay |
+| **Stub insertion for dead tickers** | Prevents infinite retry loops; stub expires after 7 days |
+| **Recursive NaN sanitizer** | Strips `float('NaN')` and `"NaN"` strings from nested JSONB before Postgres insertion |
+| **`_parse_float()` for comma-formatted numbers** | Converts `"7,245.07"` → `7245.07` for DB float columns |
+
+### 7.4 Component Map
+
+| Component | File | Responsibility |
+| :--- | :--- | :--- |
+| `VnstockClient` | `src/data/sources/vnstock_client.py` | vnstock API wrapper with tenacity retry |
+| `FinancialCollector` | `src/agents/financial/collector.py` | Orchestrates sync (bootstrap / incremental / market intelligence) |
+| `FinancialWorker` | `src/agents/financial/worker.py` | APScheduler daily trigger + bootstrap detection |
+| `FinancialRepository` | `src/data/persistence/financial_repo.py` | PostgreSQL upsert operations with NaN sanitization |
+| `clean_nan_recursive()` | `src/data/persistence/financial_repo.py` | Recursive JSONB sanitizer for shareholders, officers, reports |
+
+### 7.5 Market Intelligence Categories
+
+| Category | Source | Sync Frequency | DB Table |
+| :--- | :--- | :--- | :--- |
+| Company Profiles | vnstock (VCI) | Weekly (7-day staleness) | `companies` |
+| Financial Reports | vnstock (VCI) | Weekly | `financial_reports` |
+| EOD OHLCV | vnstock (VCI) | Daily (market benchmark) | `stock_eod` |
+| Mutual Funds | FMarket API | Daily | `mutual_fund_nav` |
+| Gold Prices | VCI/VCB | Daily | `commodity_prices` |
+| FX Rates | VCI/VCB | Daily | `commodity_prices` |
+| Global Commodities | MSN Finance | Daily (404 fallback) | `commodity_prices` |
+| Index Stats (VNINDEX, VN30) | vnstock (VCI) | Daily | `market_index_stats` |
+

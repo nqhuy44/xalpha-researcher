@@ -14,6 +14,8 @@ from telegram.ext import (
     ContextTypes,
 )
 from telegram.constants import ParseMode
+from sqlalchemy import select
+from src.db.models.news import NewsArticle
 
 from src.config.settings import settings
 
@@ -108,7 +110,12 @@ class TelegramBot:
         )
 
         try:
-            collector = NewsCollector()
+            # 0. Preload known hashes from DB to avoid re-scraping
+            async with async_session_factory() as session:
+                repo = NewsRepository(session)
+                known_hashes = await repo.get_recent_hashes(days=7)
+            
+            collector = NewsCollector(known_hashes=known_hashes)
             # Chỉ thu thập tin tức trong 24h qua để tránh tin cũ
             result = await collector.collect(hours_ago=24, persist=True)
         except Exception as e:
@@ -133,36 +140,34 @@ class TelegramBot:
             async with async_session_factory() as session:
                 repo = NewsRepository(session)
                 
-                # Process queue in batches grouped by domain
-                batch_count = 0
-                while True:
-                    unreported = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
-                    if not unreported:
-                        if batch_count == 0:
-                            await self._safe_reply(update, "Không có bản ghi dữ liệu mới nào chưa được báo cáo.")
-                        return
-                        
-                    domain_map = {
-                        "macro": "Kinh tế vĩ mô",
-                        "finance": "Tài chính & Kinh doanh",
-                        "geopolitics": "Địa chính trị & Thế giới",
-                        "tech": "Công nghệ số",
-                        "law": "Pháp luật & Chính sách",
-                        "real_estate": "Bất động sản",
-                        "banking": "Ngân hàng",
-                        "general": "Tin tức chung"
-                    }
-                    current_domain = unreported[0].domain
-                    topic_name = domain_map.get(current_domain, current_domain.capitalize())
+                # 2. Single DB query: get ALL unreported articles grouped by domain
+                grouped = await repo.get_all_unreported_grouped(limit_per_domain=500)
+                
+                if not grouped:
+                    await self._safe_reply(update, "✅ Hệ thống đã chạy xong, nhưng không có thông tin mới đáng chú ý.")
+                    return
+                
+                domain_map = {
+                    "macro": "Kinh tế vĩ mô",
+                    "finance": "Tài chính & Kinh doanh",
+                    "geopolitics": "Địa chính trị & Thế giới",
+                    "tech": "Công nghệ số",
+                    "law": "Pháp luật & Chính sách",
+                    "real_estate": "Bất động sản",
+                    "banking": "Ngân hàng",
+                    "general": "Tin tức chung",
+                }
+
+                await self._safe_reply(update, f"Đang xử lý tổng hợp dữ liệu {len(grouped)} chủ đề... Tiến trình này có thể mất vài phút.")
+                
+                # 3. Process each domain exactly ONCE
+                for domain, articles in grouped.items():
+                    topic_name = domain_map.get(domain, domain.capitalize())
                     
-                    batch_count += 1
-                    if batch_count == 1:
-                        await self._safe_reply(update, f"Đang xử lý tổng hợp dữ liệu... Tiến trình này có thể mất vài phút.")
-                    llm = GeminiService()
-                    
-                    # Stage 1: Batch Summarization
-                    unsummarized = [a for a in unreported if not a.is_summarized]
+                    # Stage 1: Summarization (Flash-Lite)
+                    unsummarized = [a for a in articles if not a.is_summarized]
                     if unsummarized:
+                        llm = GeminiService()
                         dtos = [
                             NewsArticleDTO(
                                 article_id=str(a.id),
@@ -180,23 +185,34 @@ class TelegramBot:
                         summary_updates = await llm.generate_article_summaries(dtos)
                         if summary_updates:
                             await repo.update_summaries(summary_updates)
-                            
-                            # Fetch again to get updated ai_summaries
-                            unreported_updated = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
-                            unreported = [u for u in unreported_updated if u.domain == current_domain]
-                    
-                    # Stage 2: Synthesis
-                    summaries_texts = [a.ai_summary for a in unreported if a.ai_summary]
+                            # Refresh summaries for synthesis
+                            for a in articles:
+                                for aid, summary_text in summary_updates:
+                                    if str(a.id) == aid:
+                                        a.ai_summary = summary_text
+
+                    # Stage 2: Synthesis (Flash) — ONE report per domain
+                    summaries_texts = [a.ai_summary for a in articles if a.ai_summary]
                     
                     if summaries_texts:
-                        summary_topics = await llm.synthesize_reports(summaries_texts)
+                        llm = GeminiService()
+                        report = await llm.synthesize_reports(summaries_texts)  # returns str now
                         
-                        # Gửi từng chủ đề riêng biệt
-                        for topic_msg in summary_topics:
-                            await self.send_message(f"📌 **[{topic_name.upper()}]**\n{topic_msg}", chat_id=user_chat_id)
+                        # Fix: check if it's a list (in case it wasn't reloaded) or string
+                        if isinstance(report, list):
+                            report = "\n".join(report)
                             
-                    # Mark as reported regardless of summary success to prevent infinite loops
-                    article_ids = [str(a.id) for a in unreported]
+                        # Build ONE consolidated Telegram message per domain
+                        msg = (
+                            f"📌 *[{topic_name.upper()}]* ({len(articles)} bài)\n\n"
+                            f"{report}"
+                        )
+                        await self.send_message(msg, chat_id=user_chat_id)
+                    else:
+                        logger.warning("no_summaries_for_domain", domain=domain)
+                    
+                    # Always mark as reported to prevent re-processing
+                    article_ids = [str(a.id) for a in articles]
                     await repo.mark_as_reported(article_ids)
                         
         except Exception as e:

@@ -4,7 +4,7 @@
 
 | Tool | Version | Rationale |
 |---|---|---|
-| Python | 3.11+ | Async support, match group syntax, ML ecosystem maturity |
+| Python | 3.13 | Latest stable, async improvements, ML ecosystem maturity |
 | Poetry | Latest | Deterministic dependency resolution, lockfile |
 
 ## LLM & AI
@@ -42,11 +42,14 @@
 
 | Tool | Version | Rationale |
 |---|---|---|
-| vnstock | ^3.0 | Clean JSON financial data from SSI/TCBS (20yr history) |
+| vnstock | ^3.4 | Clean JSON financial data from VCI/SSI/TCBS (20yr history) |
 | feedparser | ^6.0 | RSS feed parsing for news ingestion |
 | httpx | ^0.28 | Async HTTP client for API integrations |
+| trafilatura | ^2.0 | Purpose-built HTML article extraction (replaces BeautifulSoup) |
 | pandas | ^2.0 | Data manipulation and analysis |
 | numpy | ^2.0 | Numerical computation |
+| tenacity | ^9.0 | Retry logic with exponential backoff for transient API errors |
+| APScheduler | ^3.10 | Cron-based job scheduling for daily sync and news collection |
 
 ## API & User Interfaces
 
@@ -69,7 +72,8 @@
 
 | Tool | Version | Rationale |
 |---|---|---|
-| Docker + Compose | Latest | Containerized local dev (PostgreSQL, Redis) |
+| Docker + Compose | Latest | Containerized deployment (PostgreSQL, Redis, App services) |
 | Ruff | ^0.9 | Fast Python linter + formatter (replaces flake8+black+isort) |
 | pytest | ^8.0 | Test framework with async support |
 | structlog | ^24.0 | Structured JSON logging |
+| tqdm | ^4.66 | Progress bars for long-running sync operations |

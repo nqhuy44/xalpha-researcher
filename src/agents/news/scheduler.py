@@ -59,22 +59,48 @@ class NewsScheduler:
         """Standard collection task for the scheduler."""
         logger.info("scheduled_task_starting", task="Full News Collection")
         try:
+            # 0. Preload known hashes from DB to avoid re-scraping
+            async with async_session_factory() as session:
+                repo = NewsRepository(session)
+                known_hashes = await repo.get_recent_hashes(days=7)
+            
+            logger.info("preloaded_known_hashes", count=len(known_hashes))
+            self.collector = NewsCollector(known_hashes=known_hashes)
+
             # 1. Fetch new raw articles and persist to DB
             result = await self.collector.collect(hours_ago=12, persist=True)
             
             async with async_session_factory() as session:
                 repo = NewsRepository(session)
                 
-                # 2. Fetch queue of unreported articles in batches grouped by domain
-                while True:
-                    unreported = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
-                    if not unreported:
-                        break
-                        
-                    current_domain = unreported[0].domain
+                # 2. Single DB query: get ALL unreported articles grouped by domain
+                grouped = await repo.get_all_unreported_grouped(limit_per_domain=500)
+                
+                if not grouped:
+                    logger.info("no_unreported_articles_to_process")
+                    return
+                
+                logger.info("unreported_articles_found", 
+                           domains=list(grouped.keys()),
+                           total=sum(len(v) for v in grouped.values()))
+                
+                domain_map = {
+                    "macro": "Kinh tế vĩ mô",
+                    "finance": "Tài chính & Kinh doanh",
+                    "geopolitics": "Địa chính trị & Thế giới",
+                    "tech": "Công nghệ số",
+                    "law": "Pháp luật & Chính sách",
+                    "real_estate": "Bất động sản",
+                    "banking": "Ngân hàng",
+                    "general": "Tin tức chung",
+                }
+
+                # 3. Process each domain exactly ONCE
+                for domain, articles in grouped.items():
+                    topic_name = domain_map.get(domain, domain.capitalize())
                     
-                    # 3. Stage 1: Summarization (Flash-Lite)
-                    unsummarized = [a for a in unreported if not a.is_summarized]
+                    # Stage 1: Summarization (Flash-Lite)
+                    unsummarized = [a for a in articles if not a.is_summarized]
                     if unsummarized:
                         llm = GeminiService()
                         dtos = [
@@ -91,47 +117,33 @@ class NewsScheduler:
                                 ingested_at=a.ingested_at,
                             ) for a in unsummarized
                         ]
-                        # Generate and save summaries
                         summary_updates = await llm.generate_article_summaries(dtos)
                         if summary_updates:
                             await repo.update_summaries(summary_updates)
-                            
-                            # Refresh the queue to get the new ai_summaries for this domain
-                            # We can just fetch again because it pulls chronologically un-reported
-                            unreported_updated = await repo.get_unreported_articles_by_domain(limit_per_domain=50)
-                            # Safety check exactly for the domain we are currently pinning
-                            unreported = [u for u in unreported_updated if u.domain == current_domain]
+                            # Refresh summaries for synthesis
+                            for a in articles:
+                                for aid, summary_text in summary_updates:
+                                    if str(a.id) == aid:
+                                        a.ai_summary = summary_text
 
-                    # 4. Stage 2: Synthesis & Reporting (Flash)
-                    summaries_texts = [a.ai_summary for a in unreported if a.ai_summary]
+                    # Stage 2: Synthesis (Flash) — ONE report per domain
+                    summaries_texts = [a.ai_summary for a in articles if a.ai_summary]
                     
                     if summaries_texts:
                         llm = GeminiService()
-                        summary_topics = await llm.synthesize_reports(summaries_texts)
+                        report = await llm.synthesize_reports(summaries_texts)
                         
-                        domain_map = {
-                            "macro": "Kinh tế vĩ mô",
-                            "finance": "Tài chính & Kinh doanh",
-                            "geopolitics": "Địa chính trị & Thế giới",
-                            "tech": "Công nghệ số",
-                            "law": "Pháp luật & Chính sách",
-                            "real_estate": "Bất động sản",
-                            "banking": "Ngân hàng",
-                            "general": "Tin tức chung"
-                        }
-                        topic_name = domain_map.get(current_domain, current_domain.capitalize())
-                        
-                        final_msg = (
-                            f"*Báo Cáo Thu Thập Dữ Liệu Tự Động (Chủ đề: {topic_name})*\n\n"
-                            f"- Tin tức trong batch báo cáo: {len(unreported)}\n"
+                        # Build ONE consolidated Telegram message per domain
+                        msg = (
+                            f"📌 *[{topic_name.upper()}]* ({len(articles)} bài)\n\n"
+                            f"{report}"
                         )
-                        await _notify_telegram(final_msg)
-                        
-                        for topic in summary_topics:
-                            await _notify_telegram(f"📌 **[{topic_name.upper()}]**\n{topic}")
-                            
-                    # 5. Mark as reported regardless of summary success
-                    article_ids = [str(a.id) for a in unreported]
+                        await _notify_telegram(msg)
+                    else:
+                        logger.warning("no_summaries_for_domain", domain=domain)
+                    
+                    # Always mark as reported to prevent re-processing
+                    article_ids = [str(a.id) for a in articles]
                     await repo.mark_as_reported(article_ids)
 
             logger.info("scheduled_task_complete")
@@ -168,4 +180,9 @@ class NewsScheduler:
         except (KeyboardInterrupt, SystemExit):
             self.scheduler.shutdown()
             logger.info("scheduler_shutdown")
+
+
+if __name__ == "__main__":
+    scheduler = NewsScheduler()
+    asyncio.run(scheduler.run_forever())
 
