@@ -134,13 +134,29 @@ class VnstockClient:
 
     def get_all_tickers(self) -> List[str]:
         """
-        Fetches all active stock ticker symbols.
+        Fetches active stock ticker symbols, filtered to high-quality/liquid universes:
+        VN100 (VN30 + VNMIDCAP on HOSE) and HNX30.
+        This drops UPCOM and penny stocks.
         """
         try:
             lst = vnstock.Listing("VCI")
-            df = lst.all_symbols()
-            if df is not None and not df.empty:
-                return df['symbol'].tolist()
+            # Get VN100 and HNX30 series
+            vn100 = lst.symbols_by_group("VN100")
+            hnx30 = lst.symbols_by_group("HNX30")
+            
+            tickers = []
+            if vn100 is not None and not vn100.empty:
+                tickers.extend(vn100.tolist())
+            if hnx30 is not None and not hnx30.empty:
+                tickers.extend(hnx30.tolist())
+                
+            # Remove duplicates just in case, sort alphabetically
+            unique_tickers = sorted(list(set(tickers)))
+            
+            if unique_tickers:
+                logger.info(f"Loaded {len(unique_tickers)} premium tickers (VN100 + HNX30)")
+                return unique_tickers
+                
         except Exception as e:
             logger.error(f"Error fetching ticker list: {e}", exc_info=True)
         return []

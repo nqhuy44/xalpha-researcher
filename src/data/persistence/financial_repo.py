@@ -6,7 +6,7 @@ import logging
 import math
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 

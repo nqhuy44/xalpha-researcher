@@ -117,6 +117,11 @@ class FinancialCollector:
                 repo = FinancialRepository(session)
                 records = df.to_dict('records')
                 count = await repo.upsert_eod_records(ticker, records)
+                
+                # Always touch last_updated so we don't retry illiquid stocks 
+                # immediately if their latest trade date is still behind market date
+                await repo.touch_company_last_updated(ticker)
+                
                 logger.info(f"Upserted {count} EOD records for {ticker}")
                 return count
         else:
@@ -224,6 +229,13 @@ class FinancialCollector:
                 if ticker_eod_str >= market_date:
                     skipped += 1
                     continue  # Already has the latest candle. Skip entirely.
+                
+                # Illiquid stock protection: if we checked < 1 day ago and it's still behind
+                # market_date, it means the API just didn't have new trades. Skip it for today.
+                if last_updated and (now_utc - last_updated).total_seconds() < 86400:
+                    skipped += 1
+                    continue
+                    
                 # Outdated: calculate exact start date for the gap
                 from_date = (latest_eod + timedelta(days=1)).strftime("%Y-%m-%d")
                 tickers_eod_only.append((ticker, from_date))
