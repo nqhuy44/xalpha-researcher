@@ -14,7 +14,7 @@
 | Google Gemini 2.5 Pro | Latest | 2M token context, complex reasoning, Grounding with Google Search |
 | Google Gemini 2.5 Flash | Latest | Low-latency real-time agent tasks |
 | Google Gemini 2.5 Flash-Lite | Latest | Cost-optimized high-volume extraction ($0.10/1M input) |
-| LangGraph | ^0.3 | Graph-based agent orchestration, state management, human-in-the-loop |
+| LangGraph | ^0.3 | Graph-based agent orchestration (implemented in Analyst Agent) |
 | LangChain | ^0.3 | LLM abstraction layer, tool integration |
 
 ## NLP & Machine Learning

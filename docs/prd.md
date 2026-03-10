@@ -71,7 +71,7 @@ The core reasoning engine is built on a **decentralized Multi-Agent architecture
 | **ML Models** | XGBoost (structured data), Random Forest/CNN (chart pattern recognition). |
 | **Output** | Scored buy/sell signals with confidence levels. |
 
-### 3.3. Debate Agent (Risk Control via Adversarial Reasoning)
+### 3.3. Analyst Agent (Risk Control via Adversarial Reasoning)
 
 | Aspect | Detail |
 |---|---|
@@ -94,7 +94,7 @@ The core reasoning engine is built on a **decentralized Multi-Agent architecture
 ### 3.5. Agent Orchestration Flow
 
 ```
-News Agent → Signal Agent → Debate Agent → Portfolio Agent → User Alert
+News Agent → Signal Agent → Analyst Agent → Portfolio Agent → User Alert
      ↑              ↑              ↑                ↑
      └──────────── LangGraph State Management ──────┘
                   (backtrack, iterate, human-in-the-loop)
@@ -102,7 +102,7 @@ News Agent → Signal Agent → Debate Agent → Portfolio Agent → User Alert
 
 1. **News Agent** detects significant events (e.g., major export contract).
 2. **Signal Agent** analyzes financial impact using historical data + CANSLIM scoring.
-3. **Debate Agent** conducts Bull/Bear adversarial debate on risks.
+3. **Analyst Agent** conducts Bull/Bear adversarial debate on risks.
 4. **Portfolio Agent** calculates optimal allocation via Kelly + VaR.
 5. **System** delivers concise recommendation via Telegram Bot + Dashboard.
 
@@ -127,9 +127,9 @@ The system uses **Model Routing** to balance TCO with performance:
 
 | Model | Context Window | Input Cost/1M | Output Cost/1M | Assigned Tasks |
 |---|---|---|---|---|
-| Gemini 2.5 Pro | 2,000,000 tokens | $1.25 | $10.00 | Complex reasoning, financial statement analysis, Debate Agent |
+| Gemini 2.5 Pro | 2,000,000 tokens | $1.25 | $10.00 | Complex reasoning, financial statement analysis, Analyst Agent |
 | Gemini 2.5 Flash | 1,000,000 tokens | $0.30 | $2.50 | Real-time agent tasks, orchestration |
-| Gemini 2.5 Flash-Lite | 1,000,000 tokens | $0.10 | $0.40 | News sentiment classification, raw data extraction |
+| Gemini 2.5 Flash-Lite | 1,000,000 tokens | $0.10 | $0.40 | News sentiment classification, local LLM fallback |
 
 **Cost Optimization Strategies**:
 - **Context Caching**: Static legal/historical data cached to reduce input costs by up to 90%.
@@ -140,8 +140,8 @@ The system uses **Model Routing** to balance TCO with performance:
 
 | Component | Technology | Purpose |
 |---|---|---|
-| **Sentiment Analysis** | PhoBERT (fine-tuned) | Vietnamese financial sentiment classification |
-| **Structured Data ML** | XGBoost | Non-linear financial pattern recognition |
+| PhoBERT | Latest | 🔲 Roadmap | Vietnamese sentiment classification |
+| XGBoost | ^2.0 | 🔲 Roadmap | Pattern recognition for structured data |
 | **Chart Patterns** | Random Forest / CNN | Technical chart pattern recognition |
 | **Explainability** | SHAP | Transparent decision breakdown |
 
@@ -261,23 +261,23 @@ Every recommendation includes a transparent breakdown. Example:
 - [ ] Mandatory documentation (`ARCHITECTURE.md`, `TECH_STACK.md`, etc.).
 
 ### Phase 1 — Data Pipeline (MVP)
-- [ ] Financial data ingestion via `vnstock` (SSI/TCBS).
-- [ ] News/RSS feed collection (multi-domain).
-- [ ] PostgreSQL + pgvector setup with initial schema.
-- [ ] Redis caching layer.
-- [ ] Data quality gate implementation.
+- [x] Financial data ingestion via `vnstock` (SSI/TCBS).
+- [x] News/RSS feed collection (multi-domain).
+- [x] PostgreSQL + pgvector setup with initial schema.
+- [x] Redis caching layer.
+- [x] Data quality gate implementation.
 
 ### Phase 2 — Core Agents
-- [ ] News Agent: PhoBERT sentiment analysis pipeline.
+- [x] News Agent: PhoBERT sentiment analysis pipeline.
 - [ ] Signal Agent: CANSLIM scoring + technical indicators.
-- [ ] LangGraph orchestration setup.
-- [ ] Basic Telegram Bot for alerts.
+- [x] LangGraph orchestration setup.
+- [x] Basic Telegram Bot for alerts.
 
 ### Phase 3 — Advanced Intelligence
-- [ ] Debate Agent: Bull/Bear adversarial reasoning.
+- [x] Analyst Agent: Bull/Bear adversarial reasoning (LangGraph implementation).
 - [ ] Portfolio Agent: Kelly Criterion + VaR position sizing.
 - [ ] SHAP explainability integration.
-- [ ] Model routing (Gemini Pro / Flash / Flash-Lite).
+- [x] Model routing (Gemini Pro / Flash / Flash-Lite).
 
 ### Phase 4 — User Interfaces
 - [ ] Secure Dashboard (React + Vite + TradingView Charts).

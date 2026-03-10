@@ -51,6 +51,11 @@ run: ## Run the main application
 collect-news: ## Collect news from sources and save to DB
 	.venv/bin/python scripts/manage_news.py collect --hours 24 --persist
 
+# Manual Debate Analysis
+analyze: ## Run debate analysis for a ticker (e.g., make analyze TICKER=VNM ROUNDS=2)
+	@if [ -z "$(TICKER)" ]; then echo "Error: TICKER is required (e.g., make analyze TICKER=FPT)"; exit 1; fi
+	PYTHONPATH=. .venv/bin/python scripts/test_debate.py $(TICKER) $(ROUNDS)
+
 telegram-bot: ## Start the Telegram Bot server
 	.venv/bin/python -m src.interfaces.telegram.bot
 

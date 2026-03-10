@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from src.agents.news.collector import NewsCollector
-from src.services.llm import GeminiService
+from src.services.llm import LLMService
 from src.config.settings import settings
 from src.db.session import async_session_factory
 from src.data.persistence.news_repo import NewsRepository
@@ -102,7 +102,7 @@ class NewsScheduler:
                     # Stage 1: Summarization (Flash-Lite)
                     unsummarized = [a for a in articles if not a.is_summarized]
                     if unsummarized:
-                        llm = GeminiService()
+                        llm = LLMService()
                         dtos = [
                             NewsArticleDTO(
                                 article_id=str(a.id),
@@ -130,7 +130,7 @@ class NewsScheduler:
                     summaries_texts = [a.ai_summary for a in articles if a.ai_summary]
                     
                     if summaries_texts:
-                        llm = GeminiService()
+                        llm = LLMService()
                         report = await llm.synthesize_reports(summaries_texts)
                         
                         # Build ONE consolidated Telegram message per domain

@@ -18,10 +18,11 @@ erDiagram
     COMPANY ||--o{ STOCK_PRICE : has
     COMPANY ||--o{ INSIDER_TRADE : has
     COMPANY ||--o{ NEWS_ARTICLE : mentioned_in
+    COMPANY ||--o{ DEBATE_VERDICT : has
     COMPANY ||--o{ AGENT_ANALYSIS : analyzed_by
 
     NEWS_ARTICLE ||--o{ SENTIMENT_SCORE : has
-    AGENT_ANALYSIS ||--o{ DEBATE_RECORD : contains
+    DEBATE_VERDICT ||--o{ DEBATE_RECORD : generated_from
 
     PORTFOLIO ||--o{ POSITION : holds
     POSITION }o--|| COMPANY : references
@@ -117,6 +118,21 @@ erDiagram
         timestamp ingested_at
     }
 
+    DEBATE_VERDICT {
+        uuid id PK
+        varchar ticker FK
+        varchar decision
+        int confidence_score
+        int bull_score
+        int bear_score
+        jsonb short_term
+        jsonb medium_term
+        jsonb long_term
+        text judge_synthesis
+        boolean is_active
+        timestamp created_at
+    }
+
     COMPANY ||--o{ FINANCIAL_REPORT : has
     COMPANY ||--o{ STOCK_EOD : has
     COMPANY ||--o{ STOCK_TRADING_STATS : has
@@ -134,6 +150,7 @@ erDiagram
 | `news_article` | `domain` | B-tree | Domain-specific filtering |
 | `sentiment_score` | `(company_id, created_at)` | Composite B-tree | Sentiment timeline |
 | `financial_report` | `(company_id, period_end)` | Composite B-tree | Historical financials |
+| `debate_verdicts` | `(ticker, is_active)` | Composite B-tree | Active verdict lookup |
 | `agent_analysis` | `(company_id, created_at)` | Composite B-tree | Analysis history |
 | `alert` | `(portfolio_id, delivered)` | Composite B-tree | Undelivered alert queue |
 

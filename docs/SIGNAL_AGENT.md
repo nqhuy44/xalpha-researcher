@@ -1,5 +1,7 @@
 # Feature: Signal Agent (Quantitative Screener)
 
+**Status: 🔲 Planned**
+
 ## Overview
 
 The Signal Agent screens the entire Vietnamese equity universe using a combination of CANSLIM fundamental analysis and technical indicator signals.

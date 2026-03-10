@@ -1,8 +1,18 @@
 # Architecture — xalpha-researcher
 
-## Overview
+## 1. Overview
 
-xalpha-researcher is a **Multi-Agent System (MAS)** for personalized Vietnamese stock market analysis. It follows a microservice-oriented design where each agent runs as an independent process/container, sharing a common PostgreSQL database.
+xalpha-researcher is a **Multi-Agent System (MAS)** for personalized Vietnamese stock market analysis. It follows a decoupled, microservice-oriented design where specialized agents collaborate via a centralized database and state-graph orchestration.
+
+## Core Design Principles
+
+| Principle | Implementation |
+|---|---|
+| **Adversarial Reasoning** | Every buy thesis must survive a Bull/Bear debate orchestrated by LangGraph. |
+| **Data Quality First** | Automated verification gates ensure low-quality data never triggers a signal. |
+| **Idempotency** | All synchronization and worker tasks are safe to retry and resume. |
+| **Multi-Model Routing** | Strategic model selection (Gemini Pro/Flash/Lite) balances cost, speed, and depth. |
+| **Risk-Adjusted Decision** | Decisions are not binary; they are sized using Kelly Criterion + Value-at-Risk (VaR). |
 
 ## High-Level Architecture (Current State)
 
@@ -18,17 +28,24 @@ graph TB
     subgraph "Agent Layer (Implemented)"
         NA["News Agent<br/>Collector + Scheduler<br/>LLM Summarization"]
         FA["Financial Agent<br/>Collector + Worker<br/>EOD, Profile, Reports"]
+        AA["Analyst Agent<br/>LangGraph Debate<br/>Bull vs Bear"]
     end
 
     subgraph "Agent Layer (Planned)"
+        GK["Gatekeeper Agent<br/>L0 Rule-based Filter"]
         SA["Signal Agent<br/>CANSLIM + Technical"]
-        DA["Debate Agent<br/>Bull vs Bear"]
         PA["Portfolio Agent<br/>Kelly + VaR"]
     end
 
-    subgraph "LLM Layer"
-        FLASH["Gemini 2.0 Flash<br/>News synthesis"]
-        LITE["Gemini 1.5 Flash-Lite<br/>Batch summarization"]
+    subgraph "Reasoning Layer (Abstraction)"
+        FAST["FastTier<br/>(Gemini Lite / Qwen 7B)<br/>Extraction & Cleaning"]
+        DEEP["DeepTier<br/>(Gemini Pro / GPT-4o)<br/>Adversarial Reasoning"]
+        JUDGE["JudgeTier<br/>(Gemini Pro / DeepSeek)<br/>Final Synthesis"]
+    end
+
+    subgraph "Inference Infrastructure"
+        CLOUD["Cloud API<br/>(Gemini / OpenAI)"]
+        LOCAL["Local Server<br/>(Ollama / vLLM)"]
     end
 
     subgraph "Data Layer"
@@ -83,8 +100,9 @@ Each application service uses the **same Docker image** (`nqh44/xalpha-researche
 | **Config** | `src/config/` | ✅ Implemented | Pydantic-based settings from environment variables |
 | **News Agent** | `src/agents/news/` | ✅ Implemented | RSS collection, HTML scraping, LLM summarization, Telegram reporting |
 | **Financial Agent** | `src/agents/financial/` | ✅ Implemented | vnstock data sync (EOD, profiles, financials, market intelligence) |
+| **Analyst Agent** | `src/agents/analyst/` | ✅ Implemented | LangGraph-based Bull vs Bear adversarial debate |
+| **Gatekeeper Agent** | `src/agents/gatekeeper/` | 🔲 Planned | L0 Rule-based filter (Liquidity, Market Cap) |
 | **Signal Agent** | `src/agents/signal/` | 🔲 Planned | CANSLIM scoring, technical analysis |
-| **Debate Agent** | `src/agents/debate/` | 🔲 Planned | Adversarial Bull/Bear reasoning |
 | **Portfolio Agent** | `src/agents/portfolio/` | 🔲 Planned | Kelly Criterion, VaR, position sizing |
 | **Data Sources** | `src/data/sources/` | ✅ Implemented | RSS, vnstock, HTML scraper connectors |
 | **Data Persistence** | `src/data/persistence/` | ✅ Implemented | Repository pattern for all DB operations |
@@ -100,17 +118,23 @@ Each application service uses the **same Docker image** (`nqh44/xalpha-researche
 | **Worker Pattern** | `FinancialWorker`, `NewsScheduler` as independent long-running processes |
 | **Incremental Sync** | Market benchmark date comparison to fetch only missing data |
 | **Stub Insertion** | Dead/new tickers get a DB stub to prevent infinite retry loops |
+| **Structured Contract** | Unified `MarketIntelligence` model decouples data from reasoning |
 | **Two-Stage LLM** | Flash-Lite for bulk extraction, Flash for synthesis (91% cost savings vs Pro) |
+| **Local Fallback** | Local Qwen 3.5 handles 60% of baseline article summarization |
 | **Graceful Degradation** | All API calls wrapped with retry + fallback to None |
 
-## Data Flow (Implemented)
+## 3-Layer Risk Architecture
 
-```
-Financial APIs (vnstock) → FinancialCollector → FinancialRepository → PostgreSQL
-                                                                    ↓
-                                              Market Benchmark (VNINDEX) → Skip if up-to-date
+The system implements a defense-in-depth strategy for capital protection:
 
-News/RSS → NewsCollector → ArticleProcessor → NewsRepository → PostgreSQL
-                                                              ↓
-                                              LLM Pipeline → Telegram
-```
+1.  **L1 — Data Quality Gate**: Validates input signals from `vnstock` and `RSS`. If data points are missing (e.g., <8 indicators), the pipeline stops.
+2.  **L2 — Adversarial Filter (Analyst Agent)**: Stress-tests the Buy signal by forcing a Bull vs Bear debate. Final consensus must exceed a 75% confidence score.
+3.  **L3 — Logical Constraint (Portfolio Agent)**: Mathematical sizing based on Kelly Criterion (adjusted for volatility) and VaR constraints.
+
+## Data Flow (Logical vs Process)
+
+### Logical Pipeline
+`Data Ingestion` → `Signal Generation` → `Adversarial Debate` → `Risk Sizing` → `Alert Delivery`
+
+### Process Pipeline (Docker Compose)
+`financial-worker` (Sync) → `Analyst Engine` (LangGraph) → `telegram-bot` (Interface)

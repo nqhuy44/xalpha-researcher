@@ -1,66 +1,100 @@
-# Feature: Debate Agent (Adversarial Reasoning)
+# Feature: Analyst Agent (Adversarial Debate)
 
-## Overview
+**Status: ✅ Implemented**
 
-The Debate Agent is the system's risk control mechanism. It employs adversarial reasoning by spawning two personas — **Bull** and **Bear** — to rigorously debate every Buy signal before it reaches the Portfolio Agent.
+## 1. Overview
 
-## Responsibilities
+The Analyst Agent (internally `src/agents/analyst`) is the system's primary **Risk Intelligence Layer**. It uses a multi-round adversarial debate orchestrated by **LangGraph** to rigorously stress-test investment signals. By pitting an optimistic Bull against a skeptical Bear, the system identifies hidden risks and validates growth catalysts before capital is committed.
 
-- Receive Buy signal proposals from the Signal Agent.
-- Spawn Bull persona to argue **for** the investment.
-- Spawn Bear persona to argue **against** the investment.
-- Synthesize a multi-dimensional risk report.
-- Eliminate confirmation bias through structured adversarial debate.
+## 2. Core Reasoning Principles
 
-## Debate Structure
+- **Single Ground Truth**: Both Bull and Bear receive the *exact same* context string from the `data_aggregator`.
+- **Independent Agency**: Personas generate arguments and rebuttals independently in parallel LangGraph nodes.
+- **Synthesized Objectivity**: A neutral Judge agent evaluates the entire transcript, cross-referencing claims against the raw context to catch hallucinations.
 
-### Bull Persona Arguments
+## 2. Debate Algorithm Specification
 
-- Growth catalysts (new products, market expansion)
-- Favorable economic cycle (low interest rates, high liquidity)
-- Undervaluation metrics (low P/E vs historical/sector average)
-- Positive technical setup (breakout, volume confirmation)
-- Institutional accumulation signals
+The system implements a **Stateful Adversarial Multi-Round (SAMR)** reasoning algorithm.
 
-### Bear Persona Arguments
+### Formal Algorithm (Pseudocode)
+```python
+def AdversarialDebateAlgorithm(ticker, context, max_rounds):
+    # Initialize State
+    state = AnalystState(ticker=ticker, context=context)
+    
+    # Round 1: Opening Thesis
+    bull_claims = DeepTier.generate(System="BullPersona", User=context)
+    bear_claims = DeepTier.generate(System="BearPersona", User=context)
+    state.append_round(bull_claims, bear_claims)
+    
+    # Rounds 2 to N: Conflict Resolution
+    for i in range(2, max_rounds + 1):
+        # Bull reads previous Bear arguments
+        bull_rebuttals = DeepTier.generate(
+            System="BullRebuttal", 
+            Context=context, 
+            Opponent=state.history[-1].bear
+        )
+        # Bear reads previous Bull arguments
+        bear_rebuttals = DeepTier.generate(
+            System="BearRebuttal", 
+            Context=context, 
+            Opponent=state.history[-1].bull
+        )
+        state.append_round(bull_rebuttals, bear_rebuttals)
+    
+    # Terminal Step: Judgment
+    transcript = state.format_history()
+    verdict = JudgeTier.generate(
+        System="JudgePersona", 
+        User={"context": context, "debate": transcript},
+        Schema=VerdictSchema
+    )
+    return verdict
+```
 
-- Hidden debt / bad debt exposure (especially bond defaults)
-- Revenue growth deceleration or margin compression
-- Geopolitical risks (trade wars, sanctions, energy disruptions)
-- Corporate governance red flags
-- Sector-specific risks (e.g., real estate oversupply, tech valuation bubble)
-- Inflation / interest rate pressure on leveraged businesses
+The system follows a state-machine logic with a fan-out/fan-in pattern:
 
-## Technical Design
+1. **Phase 1: Opening (Round 1)**
+   - **Bull Node**: Generates 5 compelling reasons to BUY.
+   - **Bear Node**: Generates 5 critical reasons to SELL.
+2. **Phase 2: Rebuttals (Rounds 2 to N)**
+   - **Bull Node**: Reads Bear's claims from the previous round and provides counter-evidence.
+   - **Bear Node**: Reads Bull's claims and identifies weaknesses or contradictory data.
+3. **Phase 3: Verdict**
+   - **Judge Node**: Consolidates all rounds into a transcript. Performs evidence scoring and issues a final `Verdict` object.
+4. **Phase 4: Safety Verification (Conditional)**
+   - **Referee Node**: Evaluates the Judge's Verdict against the raw context and transcript. Only triggered if the Judge's confidence is < 70% or the verdict is "STRONG BUY" or "STRONG SELL". Catches hallucinations, logical errors, and extreme bias without generating new financial arguments.
 
-| Component | Technology |
+## 4. Technical State & Schema
+
+The debate is governed by the `AnalystState` ([state.py](file:///home/nqhuy/nqhuy/xalpha-researcher/src/agents/analyst/state.py)).
+
+### AnalystState (LangGraph State)
+- `ticker`: Stock symbol (e.g., "HPG").
+- `context`: A comprehensive string containing EOD technicals, financial reports, and news.
+- `rounds`: A growing list of `DebateRound` objects (using `operator.add`).
+- `max_rebuttals`: Defines how many rebuttal rounds occur after the opening (default: 2).
+
+### Result Schema (Verdict)
+The final structured output from the Judge:
+- `decision`: Qualitative assessment ("Tiềm năng", "Rủi ro", "An toàn").
+- `confidence_score`: 0-100.
+- `bull_score` / `bear_score`: Winning points for each persona.
+- `judge_synthesis`: A concise summary of the prevailing logic.
+- `horizons`: Specific targets, stop-losses, and actionable `action` directives (e.g., Mua, Bán, Giữ) for Short, Medium, and Long term, each with an individual `horizon_confidence` score and detailed strategy `rationale`.
+
+## 5. Implementation Details
+
+| Component | Responsibility |
 |---|---|
-| LLM | Gemini 2.5 Pro (2M token context, complex reasoning) |
-| Prompting | Structured adversarial prompts with role assignment |
-| Grounding | Google Search integration to verify factual claims |
-| Context | Full financial reports + sentiment data via RAG |
+| `data_aggregator.py` | Fetches EOD, Financials, Sector Peers, and News into a unified string. |
+| `bull_agent.py` | Implementation of the long-term growth persona. |
+| `bear_agent.py` | Implementation of the risk-auditor/short-seller persona. |
+| `judge_agent.py` | Impartial arbiter using high-reasoning Gemini models. |
+| `referee_agent.py` | Safety verification layer that critically audits the judge's verdict for logic flaws and hallucinations. Runs conditionally to save tokens. |
+| `report_generator.py` | Converts the debate state into a modern responsive HTML report. |
 
-## Output Schema
+## 6. Model Usage
 
-```json
-{
-  "analysis_id": "uuid",
-  "symbol": "HPG",
-  "bull_argument": "Strong infrastructure spending...",
-  "bear_argument": "Margin pressure from rising iron ore...",
-  "synthesis": "Net positive with moderate risk...",
-  "risk_score": 0.35,
-  "confidence": 0.72,
-  "recommendation": "BUY_WITH_CAUTION",
-  "model_used": "gemini-2.5-pro",
-  "tokens": {"input": 45000, "output": 3200}
-}
-```
-
-## API Contract
-
-```
-POST /api/v1/debate/run        # Trigger debate for a signal
-GET  /api/v1/debate/{id}       # Get debate result
-GET  /api/v1/debate/history    # List past debates
-```
+While the system is designed for multi-model routing, the current implementation prioritizes **Gemini 2.5 Pro** for all structured output nodes to ensure strict schema compliance and deep reasoning quality. See [MULTI_AGENT_DESIGN.md](file:///home/nqhuy/nqhuy/xalpha-researcher/docs/MULTI_AGENT_DESIGN.md) for the optimization roadmap.
