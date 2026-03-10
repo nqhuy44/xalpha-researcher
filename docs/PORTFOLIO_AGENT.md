@@ -1,17 +1,18 @@
 # Feature: Portfolio Agent (Execution & Capital Management)
 
+**Status: 🔲 Planned**
+
 ## Overview
 
-The Portfolio Agent is the final execution layer. It transforms debate-validated signals into concrete capital allocation decisions using mathematical risk models, tailored for Vietnamese frontier market constraints.
+The Portfolio Agent is the final execution layer. It transforms debate-validated signals into concrete capital allocation decisions using mathematical risk models, tailored for Vietnamese frontier market constraints. See [Risk Framework](docs/RISK_CONTROL.md) for sizing logic.
 
 ## Responsibilities
 
-- Calculate optimal position sizing using Kelly Criterion (Half-Kelly).
-- Compute portfolio-level Value at Risk (VaR) at 95% confidence.
-- Monitor T+2.5 settlement cycles.
-- Track brokerage margin ratios for early margin call warnings.
-- Generate SHAP explainability reports for every recommendation.
-- Rebalance portfolio based on risk parameters.
+1. **Risk-Adjusted Position Sizing**: Transforms agent verdicts into concrete capital allocations.
+2. **Mathematical Defense**: Applies Kelly Criterion and Portfolio VaR constraints.
+3. **Execution Guardrails**: Monitors T+2.5 liquidity and margin safety.
+4. **SHAP Diagnostics**: Explains *why* a specific size was chosen (e.g., sector weighting vs technical confidence).
+5. **Dynamic Rebalancing**: Triggers alerts when portfolio risk exceeds thresholds.
 
 ## Risk Models
 

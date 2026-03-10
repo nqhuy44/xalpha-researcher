@@ -6,7 +6,7 @@ import logging
 import math
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from sqlalchemy import select, update, delete, func
+from sqlalchemy import select, update, delete, func, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,6 +112,12 @@ class FinancialRepository:
             "industry": profile.get("icb_name3"), # Level 3 industry
             "sector": profile.get("icb_name2"), # Level 2 sector
             "market_cap": profile.get("charter_capital"),
+            "pe_ratio": profile.get("pe_ratio"),
+            "pb_ratio": profile.get("pb_ratio"),
+            "roe": profile.get("roe"),
+            "roa": profile.get("roa"),
+            "eps": profile.get("eps"),
+            "ev_ebitda": profile.get("ev_ebitda"),
             "shareholders": profile.get("shareholders"),
             "officers": profile.get("officers"),
         }
@@ -261,6 +267,10 @@ class FinancialRepository:
                 "low": row.get("low", 0),
                 "close": row.get("close", 0),
                 "volume": int(row.get("volume", 0)),
+                "rsi": row.get("rsi"),
+                "macd": row.get("macd"),
+                "macd_signal": row.get("macd_signal"),
+                "macd_hist": row.get("macd_hist")
             }
 
             stmt = insert(StockEOD).values(**values)
@@ -272,6 +282,10 @@ class FinancialRepository:
                     "low": values["low"],
                     "close": values["close"],
                     "volume": values["volume"],
+                    "rsi": values["rsi"],
+                    "macd": values["macd"],
+                    "macd_signal": values["macd_signal"],
+                    "macd_hist": values["macd_hist"]
                 }
             )
 
@@ -303,18 +317,29 @@ class FinancialRepository:
         row = result.scalar_one_or_none()
         return row
 
-    async def get_all_latest_eod_dates(self) -> Dict[str, datetime]:
-        """Returns the latest trade_date for all tickers for bulk checking."""
+    async def get_all_latest_eod_dates(self) -> Dict[str, Dict[str, Any]]:
+        """Returns the latest trade_date and a flag indicating if technicals are present for all tickers."""
         from sqlalchemy import func
-        stmt = select(StockEOD.ticker, func.max(StockEOD.trade_date)).group_by(StockEOD.ticker)
+        # We need to get the latest row for each ticker. Using DISTINCT ON is efficient in Postgres.
+        stmt = text("""
+            SELECT DISTINCT ON (ticker) ticker, trade_date, rsi 
+            FROM stock_eod 
+            ORDER BY ticker, trade_date DESC
+        """)
         result = await self.session.execute(stmt)
-        return {row[0]: row[1] for row in result.all() if row[1] is not None}
+        return {row.ticker: {'trade_date': row.trade_date, 'has_technicals': row.rsi is not None} for row in result.fetchall()}
 
-    async def get_all_companies_last_updated(self) -> Dict[str, datetime]:
-        """Returns the last_updated time for all companies for bulk checking."""
-        stmt = select(Company.ticker, Company.last_updated)
+    async def get_all_companies_last_updated(self) -> Dict[str, Dict[str, Any]]:
+        """Returns the last_updated time and a flag indicating if valuations are present for all companies."""
+        stmt = select(Company.ticker, Company.last_updated, Company.pe_ratio, Company.eps)
         result = await self.session.execute(stmt)
-        return {row[0]: row[1] for row in result.all() if row[1] is not None}
+        return {
+            row.ticker: {
+                'last_updated': row.last_updated, 
+                'has_valuations': row.pe_ratio is not None or row.eps is not None
+            } 
+            for row in result.all() if row.last_updated is not None
+        }
 
     async def get_company(self, ticker: str) -> Optional[Company]:
         """Fetch company by ticker."""

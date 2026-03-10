@@ -1,7 +1,7 @@
-
+import asyncio
 import logging
 import time
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 import pandas as pd
 import vnstock
@@ -59,38 +59,47 @@ class VnstockClient:
             logger.info("No VNSTOCK__API_KEY found in config. Running vnstock in Guest mode.")
 
     @vnstock_retry
-    def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
+    async def get_company_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Fetches the company profile for a given ticker symbol."""
         try:
             df = vnstock.Company("VCI", symbol).overview()
+            await asyncio.sleep(settings.vnstock.req_delay)
             if df is not None and not df.empty:
                 return df.to_dict('records')[0]
         except Exception as e:
             logger.debug(f"Data missing/malformed inside vnstock for {symbol}: {e}")
             
+        if settings.vnstock.req_delay > 0:
+            await asyncio.sleep(settings.vnstock.req_delay)
         logger.warning(f"No profile data returned for {symbol}")
         return None
 
     @vnstock_retry
-    def get_company_shareholders(self, symbol: str) -> Optional[pd.DataFrame]:
+    async def get_company_shareholders(self, symbol: str) -> Optional[pd.DataFrame]:
         """Fetches the major shareholders for a given ticker."""
         try:
-            return vnstock.Company("VCI", symbol).shareholders()
+            res = vnstock.Company("VCI", symbol).shareholders()
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return res
         except Exception as e:
             logger.debug(f"Shareholders missing/malformed for {symbol}: {e}")
+            await asyncio.sleep(settings.vnstock.req_delay)
             return None
 
     @vnstock_retry
-    def get_company_officers(self, symbol: str) -> Optional[pd.DataFrame]:
+    async def get_company_officers(self, symbol: str) -> Optional[pd.DataFrame]:
         """Fetches the officers/management for a given ticker."""
         try:
-            return vnstock.Company("VCI", symbol).officers()
+            res = vnstock.Company("VCI", symbol).officers()
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return res
         except Exception as e:
             logger.debug(f"Officers missing/malformed for {symbol}: {e}")
+            await asyncio.sleep(settings.vnstock.req_delay)
             return None
 
     @vnstock_retry
-    def get_financial_report(
+    async def get_financial_report(
         self, 
         symbol: str, 
         period: str = "quarter", 
@@ -100,20 +109,56 @@ class VnstockClient:
         try:
             finance = vnstock.Finance("VCI", symbol, period)
             if report_type == "BalanceSheet":
-                return finance.balance_sheet()
+                res = finance.balance_sheet()
             elif report_type == "IncomeStatement":
-                return finance.income_statement()
+                res = finance.income_statement()
             elif report_type == "CashFlow":
-                return finance.cash_flow()
+                res = finance.cash_flow()
             else:
                 logger.error(f"Unknown report type: {report_type}")
                 return None
+            
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return res
         except Exception as e:
             logger.debug(f"Financial report {report_type} missing/malformed for {symbol}: {e}")
+            await asyncio.sleep(settings.vnstock.req_delay)
             return None
 
     @vnstock_retry
-    def get_eod_history(
+    async def get_valuation_ratios(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetches current valuation ratios (P/E, P/B, EPS, ROE, etc.) from VCI.
+        Returns a dictionary mapping the metric name to its value for the latest quarter.
+        """
+        try:
+            fin = vnstock.Finance("VCI", symbol, "quarter")
+            ratio_df = fin.ratio()
+            await asyncio.sleep(settings.vnstock.req_delay)
+            
+            if ratio_df is not None and not ratio_df.empty:
+                # Latest quarter is the first row
+                latest_row = ratio_df.iloc[0]
+                
+                # The columns are MultiIndex, we flatten them by taking the second level.
+                # Example: ('Chỉ tiêu định giá', 'P/E') -> 'P/E'
+                flat_dict = {}
+                for col_tuple, val in latest_row.items():
+                    if isinstance(col_tuple, tuple) and len(col_tuple) == 2:
+                        group, metric = col_tuple
+                        flat_dict[metric] = val
+                    else:
+                        flat_dict[col_tuple] = val
+                        
+                return flat_dict
+        except Exception as e:
+            logger.debug(f"Valuation ratios missing/malformed for {symbol}: {e}")
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return None
+        return None
+
+    @vnstock_retry
+    async def get_eod_history(
         self, 
         symbol: str, 
         start: str, 
@@ -122,17 +167,32 @@ class VnstockClient:
         """Fetches end-of-day historical OHLCV data."""
         try:
             quote = vnstock.Quote("VCI", symbol)
-            df = quote.history(start=start, end=end, interval="1D")
-            if df is not None and not df.empty:
-                return df
+            res = quote.history(start=start, end=end, interval="1D")
+            await asyncio.sleep(settings.vnstock.req_delay)
+            if res is not None and not res.empty:
+                return res
         except Exception as e:
             logger.debug(f"EOD history missing/malformed for {symbol}: {e}")
+            await asyncio.sleep(settings.vnstock.req_delay)
             return None
             
         logger.warning(f"No EOD data returned for {symbol} ({start} to {end})")
         return None
 
-    def get_all_tickers(self) -> List[str]:
+    @vnstock_retry
+    async def get_stock_trading_stats(self, symbol: str) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        """Fetches bid/ask and order flow statistics."""
+        try:
+            t = vnstock.Trading(source="VCI", symbol=symbol)
+            bids, asks = t.side_stats()
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return bids, asks
+        except Exception as e:
+            logger.debug(f"Trading stats missing/malformed for {symbol}: {e}")
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return None, None
+
+    async def get_all_tickers(self) -> List[str]:
         """
         Fetches active stock ticker symbols, filtered to high-quality/liquid universes:
         VN100 (VN30 + VNMIDCAP on HOSE) and HNX30.
@@ -140,9 +200,12 @@ class VnstockClient:
         """
         try:
             lst = vnstock.Listing("VCI")
+            await asyncio.sleep(settings.vnstock.req_delay)
             # Get VN100 and HNX30 series
             vn100 = lst.symbols_by_group("VN100")
+            await asyncio.sleep(settings.vnstock.req_delay)
             hnx30 = lst.symbols_by_group("HNX30")
+            await asyncio.sleep(settings.vnstock.req_delay)
             
             tickers = []
             if vn100 is not None and not vn100.empty:
@@ -163,22 +226,26 @@ class VnstockClient:
 
     # --- Phase 4: Extended Market Data (MSN Fallback) ---
 
-    def get_fund_listing(self) -> Optional[pd.DataFrame]:
+    async def get_fund_listing(self) -> Optional[pd.DataFrame]:
         """Fetches list of mutual funds from FMarket."""
         try:
             # Re-initialize main client for fund access
             v = vnstock.Vnstock()
-            return v.fund(source='FMARKET').listing()
+            res = v.fund(source='FMARKET').listing()
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return res
         except Exception as e:
             logger.error(f"Error fetching fund listing: {e}")
         return None
 
-    def get_gold_history(self) -> Optional[pd.DataFrame]:
+    async def get_gold_history(self) -> Optional[pd.DataFrame]:
         """Fetches latest gold prices for SJC and BTMC."""
         try:
             from vnstock.explorer.misc.gold_price import sjc_gold_price, btmc_goldprice
             sjc = sjc_gold_price()
+            await asyncio.sleep(settings.vnstock.req_delay)
             btmc = btmc_goldprice()
+            await asyncio.sleep(settings.vnstock.req_delay)
             
             # Combine if both exist
             frames = []
@@ -196,17 +263,19 @@ class VnstockClient:
             logger.error(f"Error fetching gold price: {e}")
         return None
 
-    def get_exchange_rate_history(self) -> Optional[pd.DataFrame]:
+    async def get_exchange_rate_history(self) -> Optional[pd.DataFrame]:
         """Fetches historical exchange rates (USDVND, etc.)."""
         try:
             from vnstock.explorer.misc.exchange_rate import vcb_exchange_rate
             # Fetch last 30 days of exchange rates if possible, or just today
-            return vcb_exchange_rate(date='') 
+            res = vcb_exchange_rate(date='') 
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return res
         except Exception as e:
             logger.error(f"Error fetching exchange rate: {e}")
         return None
 
-    def get_commodity_history(
+    async def get_commodity_history(
         self, 
         symbol: str, 
         start: str = "2015-01-01", 
@@ -228,6 +297,7 @@ class VnstockClient:
             from vnstock.explorer.msn.quote import Quote as MsnQuote
             quote = MsnQuote(symbol_id=symbol)
             df = quote.history(start=start, end=end, interval="1D")
+            await asyncio.sleep(settings.vnstock.req_delay)
             
             if df is not None and not df.empty:
                 return df
@@ -236,7 +306,7 @@ class VnstockClient:
             logger.error(f"Error fetching commodity {symbol}: {e}")
         return None
 
-    def get_macro_history(
+    async def get_macro_history(
         self, 
         indicator: str, 
         start: str = "2000-01-01", 
@@ -253,7 +323,7 @@ class VnstockClient:
         logger.warning(f"Macro class missing in vnstock 3.4.2. Skipping {indicator}")
         return None
 
-    def get_index_history(
+    async def get_index_history(
         self, 
         index_code: str, 
         start: str = "2015-01-01", 
@@ -266,7 +336,9 @@ class VnstockClient:
         try:
             source = "vci" if index_code in ["VNINDEX", "VN30", "HNX", "UPCOM"] else "msn"
             quote = vnstock.Quote(source=source, symbol=index_code)
-            return quote.history(start=start, end=end, interval="1D")
+            res = quote.history(start=start, end=end, interval="1D")
+            await asyncio.sleep(settings.vnstock.req_delay)
+            return res
         except Exception as e:
             logger.error(f"Error fetching index {index_code}: {e}")
         return None

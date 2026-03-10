@@ -12,7 +12,7 @@ The system uses 4 specialized AI agents orchestrated via **LangGraph**:
 |---|---|---|
 | **News Agent** | Sentiment extraction from multi-domain Vietnamese news | PhoBERT |
 | **Signal Agent** | Quantitative stock screening (CANSLIM + technicals) | XGBoost, RSI, MACD |
-| **Debate Agent** | Adversarial Bull vs Bear reasoning | Gemini 2.5 Pro |
+| **Analyst Agent** | Adversarial Bull vs Bear reasoning via LangGraph | Gemini 2.5 Pro |
 | **Portfolio Agent** | Risk management & position sizing | Kelly Criterion, VaR |
 
 ## Tech Stack
@@ -65,6 +65,7 @@ src/
 - [Tech Stack](docs/TECH_STACK.md)
 - [Data Flows](docs/FLOWS.md)
 - [Database Design](docs/DATABASE.md)
+- [Risk Framework](docs/RISK_CONTROL.md)
 
 ## License
 

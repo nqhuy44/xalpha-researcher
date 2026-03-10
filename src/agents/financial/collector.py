@@ -32,7 +32,7 @@ class FinancialCollector:
         Syncs company profile data.
         """
         logger.debug(f"Syncing profile for {ticker}...")
-        profile = self.vnstock.get_company_profile(ticker)
+        profile = await self.vnstock.get_company_profile(ticker)
         if not profile:
             logger.warning(f"Could not fetch profile for {ticker}. Saving blank stub to prevent continuous retries.")
             async with SessionLocal() as session:
@@ -42,13 +42,23 @@ class FinancialCollector:
             return False
 
         # Enrich with shareholders and officers
-        sh_df = self.vnstock.get_company_shareholders(ticker)
+        sh_df = await self.vnstock.get_company_shareholders(ticker)
         if sh_df is not None and not sh_df.empty:
             profile['shareholders'] = sh_df.to_dict('records')
 
-        of_df = self.vnstock.get_company_officers(ticker)
+        of_df = await self.vnstock.get_company_officers(ticker)
         if of_df is not None and not of_df.empty:
             profile['officers'] = of_df.to_dict('records')
+
+        # Enrich with real-time valuations
+        valuations = await self.vnstock.get_valuation_ratios(ticker)
+        if valuations:
+            profile['pe_ratio'] = valuations.get('P/E')
+            profile['pb_ratio'] = valuations.get('P/B')
+            profile['roe'] = valuations.get('ROE (%)')
+            profile['roa'] = valuations.get('ROA (%)')
+            profile['eps'] = valuations.get('EPS (VND)')
+            profile['ev_ebitda'] = valuations.get('EV/EBITDA')
 
         async with SessionLocal() as session:
             repo = FinancialRepository(session)
@@ -67,7 +77,7 @@ class FinancialCollector:
             
             for r_type in report_types:
                 logger.debug(f"Syncing {r_type} ({period}) for {ticker}...")
-                df = self.vnstock.get_financial_report(ticker, period=period, report_type=r_type)
+                df = await self.vnstock.get_financial_report(ticker, period=period, report_type=r_type)
                 
                 if df is not None and not df.empty:
                     reports = df.to_dict('records')
@@ -105,16 +115,62 @@ class FinancialCollector:
                 else:
                     start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
 
-        if start_date >= end_date:
+        if start_date > end_date:
             logger.info(f"EOD data for {ticker} is already up-to-date.")
             return 0
 
         logger.info(f"Syncing EOD for {ticker} from {start_date} to {end_date}...")
-        df = self.vnstock.get_eod_history(ticker, start=start_date, end=end_date)
+        df = await self.vnstock.get_eod_history(ticker, start=start_date, end=end_date)
         
         if df is not None and not df.empty:
             async with SessionLocal() as session:
                 repo = FinancialRepository(session)
+                
+                import pandas as pd
+                from sqlalchemy import select, desc
+                from src.db.models.finance import StockEOD
+                from src.agents.analyst.utils.technical import compute_rsi, compute_macd
+                
+                try:
+                    hist_records = []
+                    # For incremental sync, we need ~100 historical bars to warm up RSI/MACD logic.
+                    if not is_bootstrap:
+                        # Ensure start_date is a datetime object for comparison in SQL
+                        from_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                        if from_date_dt.tzinfo is None:
+                            import pytz
+                            from_date_dt = pytz.UTC.localize(from_date_dt)
+
+                        stmt = select(StockEOD.trade_date, StockEOD.close).where(
+                            StockEOD.ticker == ticker,
+                            StockEOD.trade_date < from_date_dt
+                        ).order_by(desc(StockEOD.trade_date)).limit(100)
+                        res = await session.execute(stmt)
+                        for row in res.fetchall():
+                            hist_records.append({"time": row[0], "close": row[1]})
+                    
+                    hist_df = pd.DataFrame(hist_records) if hist_records else pd.DataFrame(columns=['time', 'close'])
+                    new_df = df[['time', 'close']].copy()
+                    
+                    # Combine and sort chronologically for rolling indicators
+                    combined_df = pd.concat([hist_df, new_df], ignore_index=True)
+                    combined_df['time'] = pd.to_datetime(combined_df['time'], utc=True)
+                    combined_df = combined_df.sort_values('time').reset_index(drop=True)
+                    
+                    combined_df['rsi'] = compute_rsi(combined_df['close'])
+                    macd_res = compute_macd(combined_df['close'])
+                    combined_df = pd.concat([combined_df, macd_res], axis=1)
+                    
+                    df['time'] = pd.to_datetime(df['time'], utc=True)
+                    # Merge technicals back to the original payload
+                    df = pd.merge(df, combined_df[['time', 'rsi', 'MACD', 'MACD_Signal', 'MACD_Hist']], on='time', how='left')
+                    df = df.rename(columns={'MACD': 'macd', 'MACD_Signal': 'macd_signal', 'MACD_Hist': 'macd_hist'})
+                    
+                    # Replace NaN with None for SQLAlchemy insertion
+                    df = df.replace({pd.NA: None, float('nan'): None})
+                except Exception as e:
+                    logger.error(f"Failed to compute technicals during EOD sync for {ticker}: {e}")
+                
                 records = df.to_dict('records')
                 count = await repo.upsert_eod_records(ticker, records)
                 
@@ -158,7 +214,7 @@ class FinancialCollector:
         except Exception as e:
             logger.error(f"Failed to sync all data for {ticker}: {e}")
 
-    def _get_market_latest_date(self) -> str:
+    async def _get_market_latest_date(self) -> str:
         """
         Fetches the latest available trading date from VNINDEX.
         Used as the benchmark: if a ticker's latest EOD >= this date, it's up-to-date.
@@ -169,7 +225,7 @@ class FinancialCollector:
         start_date = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
         
         try:
-            df = self.vnstock.get_index_history("VNINDEX", start=start_date)
+            df = await self.vnstock.get_index_history("VNINDEX", start=start_date)
             if df is not None and not df.empty:
                 latest_date = pd.to_datetime(df['time'].max()).strftime("%Y-%m-%d")
                 logger.info(f"Market benchmark date (VNINDEX): {latest_date}")
@@ -188,7 +244,7 @@ class FinancialCollector:
         Uses a single bulk DB query + market benchmark to determine which tickers truly need updates.
         Only makes API calls for genuinely outdated data.
         """
-        tickers = self.vnstock.get_all_tickers()
+        tickers = await self.vnstock.get_all_tickers()
         if not tickers:
             logger.error("No tickers found to sync.")
             return
@@ -206,7 +262,7 @@ class FinancialCollector:
             companies_updated = await repo.get_all_companies_last_updated()  # {ticker: last_updated}
         
         # 2. Determine the REAL latest trading date from the market
-        market_date = self._get_market_latest_date()  # e.g. "2026-03-04"
+        market_date = await self._get_market_latest_date()  # e.g. "2026-03-04"
         now_utc = datetime.now(timezone.utc)
         
         # 3. Categorize tickers: full_sync (profile+finance+eod), eod_only, or skip
@@ -215,26 +271,33 @@ class FinancialCollector:
         skipped = 0
         
         for ticker in tickers:
-            last_updated = companies_updated.get(ticker)
-            latest_eod = latest_eods.get(ticker)
+            latest_info = companies_updated.get(ticker)
+            latest_eod_info = latest_eods.get(ticker)
             
-            # Profile/financials missing or stale (> 7 days) → full sync needed
-            if not last_updated or (now_utc - last_updated).days >= 7:
+            last_updated = latest_info['last_updated'] if latest_info else None
+            has_valuations = latest_info['has_valuations'] if latest_info else False
+            
+            # Profile/financials missing, stale (> 7 days), or missing crucial valuations (PE/EPS)
+            if not last_updated or (now_utc - last_updated).days >= 7 or not has_valuations:
                 tickers_full_sync.append(ticker)
                 continue
             
             # Profile is fine. Check EOD freshness against the REAL market date.
-            if latest_eod:
+            if latest_eod_info:
+                latest_eod = latest_eod_info['trade_date']
+                has_technicals = latest_eod_info['has_technicals']
                 ticker_eod_str = latest_eod.strftime("%Y-%m-%d")
+                
+                # If missing technicals, we force a sync of at least the last 30 days 
+                # to trigger the calculation logic in sync_eod.
+                if not has_technicals:
+                    from_date = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+                    tickers_eod_only.append((ticker, from_date))
+                    continue
+
                 if ticker_eod_str >= market_date:
                     skipped += 1
                     continue  # Already has the latest candle. Skip entirely.
-                
-                # Illiquid stock protection: if we checked < 1 day ago and it's still behind
-                # market_date, it means the API just didn't have new trades. Skip it for today.
-                if last_updated and (now_utc - last_updated).total_seconds() < 86400:
-                    skipped += 1
-                    continue
                     
                 # Outdated: calculate exact start date for the gap
                 from_date = (latest_eod + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -259,21 +322,40 @@ class FinancialCollector:
 
         logger.info(f"Sync plan: {len(tickers_full_sync)} FULL + {len(tickers_eod_only)} EOD-only = {total_work} tickers to process. ({skipped} skipped as up-to-date)")
         
-        # 4. Process FULL sync tickers (profile + financials + EOD)
-        if tickers_full_sync:
-            pbar = tqdm(tickers_full_sync, desc="Full Sync", unit="ticker")
-            for ticker in pbar:
-                pbar.set_description(f"[FULL] {ticker}")
-                await self.sync_full_ticker(ticker, full_sync=True, is_bootstrap=is_bootstrap)
+        # 4. Process FULL and EOD syncs in parallel with a Semaphore
+        # Target: 120-150 RPM. With delay=1.2s (~0.8 RPS), concurrency=3 yields ~2.5 RPS (150 RPM).
+        concurrency_limit = 3 
+        sem = asyncio.Semaphore(concurrency_limit)
+
+        async def sem_task(ticker_item, is_full=True):
+            async with sem:
+                if is_full:
+                    await self.sync_full_ticker(ticker_item, full_sync=True, is_bootstrap=is_bootstrap)
+                else:
+                    ticker, from_date = ticker_item
+                    await self.sync_eod(ticker, from_date=from_date)
                 await asyncio.sleep(safe_delay)
-        
-        # 5. Process EOD-only tickers (lightweight: just 1 API call per ticker)
-        if tickers_eod_only:
-            pbar = tqdm(tickers_eod_only, desc="EOD Sync", unit="ticker")
-            for ticker, from_date in pbar:
-                pbar.set_description(f"[EOD] {ticker}")
-                await self.sync_eod(ticker, from_date=from_date)
-                await asyncio.sleep(safe_delay)
+
+        try:
+            tasks = []
+            if tickers_full_sync:
+                logger.info(f"Starting parallel FULL sync for {len(tickers_full_sync)} tickers...")
+                for ticker in tickers_full_sync:
+                    tasks.append(sem_task(ticker, is_full=True))
+            
+            if tickers_eod_only:
+                logger.info(f"Starting parallel EOD sync for {len(tickers_eod_only)} tickers...")
+                for ticker_item in tickers_eod_only:
+                    tasks.append(sem_task(ticker_item, is_full=False))
+            
+            if tasks:
+                await tqdm.gather(*tasks, desc="Parallel Market Sync", unit="ticker")
+        except SystemExit as se:
+            logger.warning(f"Upstream Rate Limit triggered SystemExit: {se}")
+            logger.info("Sync halted to avoid further bans. Application will continue after cooldown.")
+            await asyncio.sleep(60)
+        except Exception as e:
+            logger.error(f"Unexpected error during market-wide sync: {e}")
 
         logger.info("Market-wide sync completed.")
 
@@ -297,7 +379,7 @@ class FinancialCollector:
     async def sync_funds(self) -> int:
         """Syncs mutual fund data from FMarket."""
         logger.info("Syncing mutual funds from FMarket...")
-        df = self.vnstock.get_fund_listing()
+        df = await self.vnstock.get_fund_listing()
         if df is not None and not df.empty:
             records = []
             now = datetime.now()
@@ -324,7 +406,7 @@ class FinancialCollector:
             repo = FinancialRepository(session)
             
             # 1. Domestic Gold (VCI/Misc fallback)
-            gold_df = self.vnstock.get_gold_history()
+            gold_df = await self.vnstock.get_gold_history()
             if gold_df is not None and not gold_df.empty:
                 records = []
                 for _, row in gold_df.iterrows():
@@ -337,7 +419,7 @@ class FinancialCollector:
                 total += await repo.upsert_commodity_prices(records)
 
             # 2. FX Rates (VCI/VCB fallback)
-            fx_df = self.vnstock.get_exchange_rate_history()
+            fx_df = await self.vnstock.get_exchange_rate_history()
             if fx_df is not None and not fx_df.empty:
                 records = []
                 for _, row in fx_df.iterrows():
@@ -368,7 +450,7 @@ class FinancialCollector:
                 else:
                     start_date = "2015-01-01"
 
-                df = self.vnstock.get_commodity_history(sym, start=start_date)
+                df = await self.vnstock.get_commodity_history(sym, start=start_date)
                 if df is not None and not df.empty:
                     import pandas as pd
                     records = []
@@ -391,9 +473,7 @@ class FinancialCollector:
         """Syncs bid/ask and order flow statistics."""
         logger.info(f"Syncing trading stats for {ticker}...")
         try:
-            import vnstock
-            t = vnstock.Trading(source="VCI", symbol=ticker)
-            bids, asks = t.side_stats()
+            bids, asks = await self.vnstock.get_stock_trading_stats(ticker)
             
             record = {
                 'ticker': ticker,
@@ -447,7 +527,7 @@ class FinancialCollector:
                     else:
                         start_date = "2015-01-01"
                         
-                    df = self.vnstock.get_index_history(index, start=start_date)
+                    df = await self.vnstock.get_index_history(index, start=start_date)
                     if df is not None and not df.empty:
                         records = []
                         for _, row in df.iterrows():
