@@ -111,39 +111,23 @@ Escalation logic between local and cloud LLMs to minimize API expenses.
                                   (Deep Analysis)
 ```
 
-## 5. Portfolio Aware Decision Flow
-Filters signals based on personal capital constraints and current holdings.
+## 5. Portfolio Agent Decision Flow (Advisory)
+Generates risk-adjusted recommendations for the user's manually maintained portfolio. **It never executes trades.**
 
 ```text
-[ Raw Signal ] ---> [ Portfolio Agent ] <--- [ User Constraints ]
-                        (Reasoning)            (Min Liquidity, etc.)
-                             |
-         +-------------------+-------------------+
-         |                   |                   |
-         v                   v                   v
-[ Capital Check ]     [ Sector Limit ]     [ Margin Limit ]
-(Available Cash)      (Max 20% / sector)    (Max 0.5 Leverage)
-         |                   |                   |
-         +-------------------+-------------------+
-                             |
-                             v
-                 [ Execution Recommendation ]
-```
-
-## 6. Portfolio Decision Flow (Risk Math)
-Mathematical sizing of the allocated capital.
-
-```text
-[ Signal Score ] ---> [ Kelly Criterion ] ---> [ Raw Fraction ]
-                            (f*)                 (Potential sizing)
-                                                     |
-                                                     v
-[ Volatility ]    ---> [ Half-Kelly Buffer ] ---> [ Adjusted Fraction ]
-(Market Risk)            (frontier market)           (Conservative)
-                                                     |
-                                                     v
-[ Position Size ] <--- [ VaR Constraint ] <--- [ Liquidity Limit ]
-(Final Allocation)       (95% Confidence)          (Max 5% of vol)
+User Portfolio
+       ↓
+Portfolio Agent
+       ↓
+Fetch debate results
+Fetch signal ratings
+Fetch news sentiment
+       ↓
+Risk evaluation
+       ↓
+Generate advisory suggestions
+       ↓
+Return recommendation report
 ```
 
 ## 7. Notification Flow

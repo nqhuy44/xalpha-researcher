@@ -133,6 +133,18 @@ class VnstockSettings(BaseModel):
     req_delay: float = 3.0  # Delay between requests to respect rate limits
 
 
+class ApiSettings(BaseModel):
+    """API and Auth settings."""
+    jwt_secret: str = "keep-it-secret-keep-it-safe" # Default for dev only
+    jwt_expire_hours: int = 24
+    admin_password: str = "" # Simple string comparison
+
+
+class DebateSettings(BaseModel):
+    """Debate Engine settings."""
+    max_rebuttals: int = 1
+
+
 class AppSettings(BaseSettings):
     """Main application settings aggregating components."""
     model_config = SettingsConfigDict(
@@ -159,11 +171,8 @@ class AppSettings(BaseSettings):
     news: NewsSettings = NewsSettings()
     telegram: TelegramSettings = TelegramSettings()
     vnstock: VnstockSettings = VnstockSettings()
-
-    # Auth
-    jwt_secret_key: str = ""
-    jwt_algorithm: str = "HS256"
-    jwt_expiration_minutes: int = 1440
+    api: ApiSettings = ApiSettings()
+    debate: DebateSettings = DebateSettings()
 
 
 # Singleton instance

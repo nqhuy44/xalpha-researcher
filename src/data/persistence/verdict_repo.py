@@ -1,9 +1,9 @@
 import structlog
 from sqlalchemy import update, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
-from src.db.models.finance import DebateVerdict
-from src.agents.analyst.state import Verdict, RefereeDecision
+from typing import Optional, List
+from src.db.models.analyst import DebateVerdict
+from src.agents.analyst.state import Verdict, RefereeDecision, DebateRound
 
 logger = structlog.get_logger(__name__)
 
@@ -13,7 +13,7 @@ class VerdictRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
         
-    async def save_verdict(self, ticker: str, verdict: Verdict, referee: Optional[RefereeDecision] = None) -> DebateVerdict:
+    async def save_verdict(self, ticker: str, verdict: Verdict, referee: Optional[RefereeDecision] = None, rounds: Optional[List[DebateRound]] = None, referee_history: Optional[List[RefereeDecision]] = None) -> DebateVerdict:
         """
         Saves a new verdict, soft-expiring all previous active verdicts for this ticker.
         """
@@ -36,10 +36,13 @@ class VerdictRepository:
                 short_term=verdict.short_term.model_dump(),
                 medium_term=verdict.medium_term.model_dump(),
                 long_term=verdict.long_term.model_dump(),
+                context_layer_assessment=verdict.context_layer_assessment.model_dump() if verdict.context_layer_assessment else None,
                 judge_synthesis=verdict.judge_synthesis,
                 referee_action=referee.action if referee else None,
                 is_referee_valid=referee.is_valid if referee else None,
                 referee_synthesis=referee.referee_synthesis if referee else None,
+                debate_rounds=[r.model_dump() for r in rounds] if rounds else None,
+                referee_history=[rh.model_dump() for rh in referee_history] if referee_history else None,
                 is_active=True
             )
             

@@ -34,7 +34,7 @@ graph TB
     subgraph "Agent Layer (Planned)"
         GK["Gatekeeper Agent<br/>L0 Rule-based Filter"]
         SA["Signal Agent<br/>CANSLIM + Technical"]
-        PA["Portfolio Agent<br/>Kelly + VaR"]
+        PA["Portfolio Agent<br/>Advisory & Risk Framework"]
     end
 
     subgraph "Reasoning Layer (Abstraction)"
@@ -103,7 +103,7 @@ Each application service uses the **same Docker image** (`nqh44/xalpha-researche
 | **Analyst Agent** | `src/agents/analyst/` | ✅ Implemented | LangGraph-based Bull vs Bear adversarial debate |
 | **Gatekeeper Agent** | `src/agents/gatekeeper/` | 🔲 Planned | L0 Rule-based filter (Liquidity, Market Cap) |
 | **Signal Agent** | `src/agents/signal/` | 🔲 Planned | CANSLIM scoring, technical analysis |
-| **Portfolio Agent** | `src/agents/portfolio/` | 🔲 Planned | Kelly Criterion, VaR, position sizing |
+| **Portfolio Agent** | `src/agents/portfolio/` | 🔲 Planned | Advisory recommendations, Risk constraint evaluation, No execution |
 | **Data Sources** | `src/data/sources/` | ✅ Implemented | RSS, vnstock, HTML scraper connectors |
 | **Data Persistence** | `src/data/persistence/` | ✅ Implemented | Repository pattern for all DB operations |
 | **DB Models** | `src/db/models/` | ✅ Implemented | SQLAlchemy ORM models (News, Finance, Company) |
@@ -129,12 +129,18 @@ The system implements a defense-in-depth strategy for capital protection:
 
 1.  **L1 — Data Quality Gate**: Validates input signals from `vnstock` and `RSS`. If data points are missing (e.g., <8 indicators), the pipeline stops.
 2.  **L2 — Adversarial Filter (Analyst Agent)**: Stress-tests the Buy signal by forcing a Bull vs Bear debate. Final consensus must exceed a 75% confidence score.
-3.  **L3 — Logical Constraint (Portfolio Agent)**: Mathematical sizing based on Kelly Criterion (adjusted for volatility) and VaR constraints.
+3.  **L3 — Logical Constraint (Portfolio Agent)**: Mathematical advisory sizing constraint based on risk framework, diversification metrics, and user portfolio limits. (Advisory only).
 
 ## Data Flow (Logical vs Process)
 
 ### Logical Pipeline
-`Data Ingestion` → `Signal Generation` → `Adversarial Debate` → `Risk Sizing` → `Alert Delivery`
+`Signal Agent` → `News Agent` → `Debate Agent` → `Risk Control` → `Portfolio Agent` → `User Advisory Report`
 
 ### Process Pipeline (Docker Compose)
 `financial-worker` (Sync) → `Analyst Engine` (LangGraph) → `telegram-bot` (Interface)
+
+## Recommendation Philosophy
+
+The xalpha-researcher platform is a **decision support system**, not an automated trading bot.
+The user maintains full control of all trading decisions at all times.
+The **Portfolio Agent** only provides structured analysis and suggestions based on mathematical risk metrics and synthesized intelligence. The Portfolio Agent must never perform automated trading.

@@ -2585,3 +2585,4 @@ xgboost==2.1.4 ; python_version >= "3.11" and python_version < "4.0" \
 xxhash==3.6.0 ; python_version >= "3.11" and python_version < "4.0" \
 zipp==3.23.0 ; python_version >= "3.11" and python_version < "4.0" \
 zstandard==0.25.0 ; python_version >= "3.11" and python_version < "4.0" \
+markdown-it-py==4.0.0

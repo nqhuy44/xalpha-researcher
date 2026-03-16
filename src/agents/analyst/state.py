@@ -12,6 +12,7 @@ class Argument(BaseModel):
 class Rebuttal(BaseModel):
     """A rebuttal to a specific opponent's claim."""
     target_claim: str = Field(description="The opponent's original claim being attacked.")
+    flaw_type: str = Field(description="The type of logical flaw identified, e.g., DATA_ERROR, SCOPE_ERROR.")
     counter_evidence: str = Field(description="Data and logic used to destroy the opponent's claim.")
 
 class DebateRound(BaseModel):
@@ -34,18 +35,28 @@ class HorizonPrediction(BaseModel):
     rationale: str = Field(description="Why this specific target and stop loss make sense.")
     risk_reward_ratio: float
 
+class ContextLayerAssessment(BaseModel):
+    """Assessment of the market, sector, and stock layers."""
+    market_wide: str = Field(description="VNINDEX trend assessment")
+    sector_wide: str = Field(description="Peer comparison assessment")
+    stock_specific: str = Field(description="Company-specific factors")
+
 class Verdict(BaseModel):
     """The final structured output from the Judge Agent."""
-    decision: str = Field(description="MUST BE exactly one of: 'Tiềm năng', 'Rủi ro', or 'An toàn'.")
+    decision: str = Field(description="MUST BE exactly one of: 'Tiềm năng', 'Khả quan', 'Trung lập', 'Rủi ro', or 'An toàn'.")
     confidence_score: int = Field(description="0 to 100 percentage of overall certainty.")
     bull_score: int = Field(description="Total points awarded to the Bull")
     bear_score: int = Field(description="Total points awarded to the Bear")
+    score_gap: int = Field(description="bull_score minus bear_score, can be negative")
+    tiebreak_applied: bool = Field(description="Whether tiebreak rule was applied")
+    tiebreak_rationale: Optional[str] = Field(default=None, description="Rationale if tiebreak was applied")
     
     bull_surviving_points: List[str]
     bear_surviving_points: List[str]
     destroyed_arguments: List[str] = Field(description="Key claims that were successfully ripped apart in rebuttals.")
     
-    judge_synthesis: str = Field(description="A 2-3 sentence overarching conclusion.")
+    context_layer_assessment: ContextLayerAssessment
+    judge_synthesis: str = Field(description="A 3-4 sentence overarching conclusion.")
     
     short_term: HorizonPrediction
     medium_term: HorizonPrediction

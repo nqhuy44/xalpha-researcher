@@ -13,9 +13,13 @@ POSTGRES_DB_NAME="xalpha"
 POSTGRES_SERVICE="postgres"
 
 # Table Groups
-NEWS_TABLES="-t news_articles -t sentiment_scores"
-# Exclude news tables from "financial" backup
-FINANCIAL_EXCLUDES="-T news_articles -T sentiment_scores"
+NEWS_TABLES="-t news_articles"
+FINANCIAL_TABLES="-T news_articles -T sentiment_scores -T debate_verdicts -T portfolio_positions -T portfolio_suggestions"
+DEBATE_TABLES="-t debate_verdicts"
+PORTFOLIO_TABLES="-t portfolio_positions -t portfolio_suggestions"
+# File Groups
+REPORTS_DIR="${PROJECT_ROOT}/reports"
+mkdir -p "$REPORTS_DIR"
 
 # Ensure backup directory exists
 mkdir -p "$BACKUP_DIR"
@@ -26,7 +30,7 @@ log_message() {
 
 usage() {
     echo "Usage: ./backup_db.sh [type]"
-    echo "  type: 'full' (default), 'news', or 'financial'"
+    echo "  type: 'full' (default), 'news', 'financial', 'debate', 'portfolio', or 'reports'"
     exit 1
 }
 
@@ -43,7 +47,13 @@ backup_postgres() {
             dump_opts="$NEWS_TABLES"
             ;;
         "financial")
-            dump_opts="$FINANCIAL_EXCLUDES"
+            dump_opts="$FINANCIAL_TABLES"
+            ;;
+        "debate")
+            dump_opts="$DEBATE_TABLES"
+            ;;
+        "portfolio")
+            dump_opts="$PORTFOLIO_TABLES"
             ;;
         *)
             log_message "Error: Unknown backup type '$type'"
@@ -78,11 +88,33 @@ backup_postgres() {
     fi
 }
 
+backup_files() {
+    local type="reports"
+    local backup_file="${BACKUP_DIR}/${type}_${TIMESTAMP}.tar.gz"
+    
+    log_message "Starting $type file backup..."
+    if tar -czf "$backup_file" -C "$PROJECT_ROOT" reports; then
+        log_message "File $type backup successful: $backup_file"
+        find "$BACKUP_DIR" -type f -name "${type}_*.tar.gz" -mtime +${RETENTION_DAYS} -exec rm {} \;
+    else
+        log_message "Error: File $type backup failed!"
+        return 1
+    fi
+}
+
 main() {
-    local type="$1"
+    local type="${1:-full}"
     log_message "Starting Xalpha Backup Process..."
     log_message "Project Root: $PROJECT_ROOT"
-    backup_postgres "$type"
+    
+    if [ "$type" == "reports" ]; then
+        backup_files
+    elif [ "$type" == "full" ]; then
+        backup_postgres "full"
+        backup_files
+    else
+        backup_postgres "$type"
+    fi
 }
 
 main "$@"

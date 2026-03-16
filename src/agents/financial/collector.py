@@ -99,7 +99,9 @@ class FinancialCollector:
             from_date: If provided, skips the DB lookup and uses this as start_date directly.
                        This is set by sync_all_market which already did a bulk DB query.
         """
-        end_date = datetime.now().strftime("%Y-%m-%d")
+        import pytz
+        vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+        end_date = datetime.now(vn_tz).strftime("%Y-%m-%d")
         
         if from_date:
             start_date = from_date
@@ -115,9 +117,20 @@ class FinancialCollector:
                 else:
                     start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
 
-        if start_date > end_date:
+        # RELAXATION: if it's after 15:30 VN and the latest date in DB is today but ingested early, 
+        # we still allow the sync to run to get the final closing price from the afternoon session.
+        import pytz
+        vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+        now_vn = datetime.now(vn_tz)
+        is_after_market = now_vn.hour > 15 or (now_vn.hour == 15 and now_vn.minute >= 30)
+
+        if start_date > end_date and not is_after_market:
             logger.info(f"EOD data for {ticker} is already up-to-date.")
             return 0
+        
+        if start_date > end_date and is_after_market:
+            # Re-read today's data to catch afternoon changes
+            start_date = end_date
 
         logger.info(f"Syncing EOD for {ticker} from {start_date} to {end_date}...")
         df = await self.vnstock.get_eod_history(ticker, start=start_date, end=end_date)
@@ -221,20 +234,40 @@ class FinancialCollector:
         Handles weekends, holidays, and upstream API lag automatically.
         """
         import pandas as pd
-        end_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
+        import pytz
+        
+        # Vietnamese market closes at 15:00. 
+        # By 15:30, EOD data is typically available on TCBS, but VNINDEX history might lag.
+        vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+        now_vn = datetime.now(vn_tz)
+        is_after_market = now_vn.hour > 15 or (now_vn.hour == 15 and now_vn.minute >= 30)
+        
+        end_date = now_vn.strftime("%Y-%m-%d")
+        start_date = (now_vn - timedelta(days=10)).strftime("%Y-%m-%d")
         
         try:
             df = await self.vnstock.get_index_history("VNINDEX", start=start_date)
             if df is not None and not df.empty:
-                latest_date = pd.to_datetime(df['time'].max()).strftime("%Y-%m-%d")
-                logger.info(f"Market benchmark date (VNINDEX): {latest_date}")
-                return latest_date
+                latest_date_str = pd.to_datetime(df['time'].max()).strftime("%Y-%m-%d")
+                
+                # If it's already after market close but VNINDEX history hasn't refreshed today,
+                # we return today's date as the target to force individual tickers to TRY syncing today's candle.
+                if is_after_market and latest_date_str < end_date:
+                    is_weekday = now_vn.weekday() < 5
+                    if is_weekday:
+                        logger.info(f"After market hours ({now_vn.strftime('%H:%M')}). Proactively targeting today's date {end_date} despite VNINDEX lag.")
+                        return end_date
+                
+                logger.info(f"Market benchmark date (VNINDEX): {latest_date_str}")
+                return latest_date_str
         except Exception as e:
             logger.warning(f"Could not determine market latest date from VNINDEX: {e}")
             
-        # Fallback: yesterday (conservative, avoids re-syncing on non-trading days)
-        fallback = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        # Fallback logic
+        if is_after_market and now_vn.weekday() < 5:
+            return end_date
+            
+        fallback = (now_vn - timedelta(days=1)).strftime("%Y-%m-%d")
         logger.info(f"Using fallback market date: {fallback}")
         return fallback
 
@@ -302,12 +335,21 @@ class FinancialCollector:
                 # Outdated: calculate exact start date for the gap
                 from_date = (latest_eod + timedelta(days=1)).strftime("%Y-%m-%d")
                 tickers_eod_only.append((ticker, from_date))
-            else:
                 # Has profile but zero EOD records (new/dead company).
-                # Check if we already attempted recently — skip if last_updated < 1 day.
-                if last_updated and (now_utc - last_updated).total_seconds() < 86400:
+                # Check if we already attempted recently.
+                # RELAXATION: if it's after 15:30 VN and last_updated was before 15:30 VN today, 
+                # we allow one more attempt to catch the final EOD numbers.
+                import pytz
+                vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+                now_vn = datetime.now(vn_tz)
+                is_after_market = now_vn.hour > 15 or (now_vn.hour == 15 and now_vn.minute >= 30)
+                
+                last_updated_vn = last_updated.astimezone(vn_tz) if last_updated else None
+                was_updated_today_pre_market = last_updated_vn and last_updated_vn.date() == now_vn.date() and (last_updated_vn.hour < 15 or (last_updated_vn.hour == 15 and last_updated_vn.minute < 30))
+
+                if last_updated and (now_utc - last_updated).total_seconds() < 86400 and not (is_after_market and was_updated_today_pre_market):
                     skipped += 1
-                    continue  # Already tried recently, API returned nothing.
+                    continue  # Already tried recently, and not in the "afternoon retry" window.
                 if is_bootstrap:
                     tickers_eod_only.append((ticker, DEFAULT_EOD_START))
                 else:

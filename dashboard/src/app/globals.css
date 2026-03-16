@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --color-vn-ceiling: #c026d3;
+  --color-vn-floor: #0ea5e9;
+  --color-vn-up: #22c55e;
+  --color-vn-down: #ef4444;
+  --color-vn-ref: #eab308;
+}
+
+:root {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --primary: #8b5cf6;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #1e293b;
+  --primary: #8b5cf6;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+@layer utilities {
+  .bg-card-dark { background-color: #1e293b; }
+  .bg-accent-tint { background-color: rgba(139, 92, 246, 0.1); }
+}

@@ -21,7 +21,7 @@ def router(state: AnalystState):
     Decides where to go after both Bull and Bear have spoken.
     Implements max_rounds check and early stopping placeholder.
     """
-    if state.current_round >= state.max_rounds:
+    if state.current_round > state.max_rounds:
         return "judge"
     
     # Early stopping logic: if they agree on major points (future implementation)
