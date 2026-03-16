@@ -16,6 +16,9 @@ setup: ## Full project setup (venv + deps + infra)
 	@echo "📋 Copy .env.example to .env and fill in your values"
 	@test -f .env || cp .env.example .env
 	@echo "✅ Setup complete! Activate venv: source .venv/bin/activate"
+	@echo "🚀 Setting up Next.js Dashboard..."
+	cd dashboard && npm install
+	@echo "✅ Dashboard setup complete!"
 
 install: ## Install dependencies only
 	poetry install
@@ -46,6 +49,15 @@ test-integration: ## Run integration tests only
 # ---------------------------------------------------------------------------
 run: ## Run the main application
 	.venv/bin/python -m src.main
+
+api: ## Start the Portfolio UI API server (Legacy)
+	.venv/bin/python -m src.api.main
+
+dashboard-dev: ## Start Next.js Dashboard in development mode
+	cd dashboard && npm run dev
+
+dashboard-build: ## Build Next.js Dashboard for production
+	cd dashboard && npm run build
 
 # Manual news collection
 collect-news: ## Collect news from sources and save to DB
@@ -92,6 +104,12 @@ deploy-infra: ## Deploy infrastructure only (PostgreSQL, Redis)
 deploy-bot: ## Deploy Telegram Bot only
 	docker compose up -d telegram-bot
 
+deploy-dashboard: ## Deploy Next.js Dashboard only
+	docker compose up -d dashboard
+
+deploy-ai-engine: ## Deploy AI Engine only
+	docker compose up -d ai-engine
+
 deploy-financial: ## Deploy Financial Worker only
 	docker compose up -d financial-worker
 
@@ -113,8 +131,30 @@ migrate: ## Run Alembic migrations to apply schema changes
 makemigrations: ## Generate a new Alembic migration script (pass m="Message")
 	.venv/bin/alembic revision --autogenerate -m "$(m)"
 
-docker-logs: ## View infrastructure logs
-	docker compose logs -f
+# ---------------------------------------------------------------------------
+# Backup & Restore
+# ---------------------------------------------------------------------------
+backup-full: ## Backup ALL data (DB + Reports)
+	./scripts/backup_db.sh full
+
+backup-news: ## Backup news data only
+	./scripts/backup_db.sh news
+
+backup-financial: ## Backup financial data only
+	./scripts/backup_db.sh financial
+
+backup-debate: ## Backup debate verdicts only
+	./scripts/backup_db.sh debate
+
+backup-portfolio: ## Backup portfolio data only
+	./scripts/backup_db.sh portfolio
+
+backup-reports: ## Backup physical HTML reports only
+	./scripts/backup_db.sh reports
+
+restore: ## Restore data from a backup file (.sql.gz for DB, .tar.gz for Files)
+	@if [ -z "$(FILE)" ]; then echo "Error: FILE is required (e.g., make restore FILE=backups/full_*.sql.gz)"; exit 1; fi
+	./scripts/restore_db.sh $(FILE)
 
 # ---------------------------------------------------------------------------
 # Cleanup

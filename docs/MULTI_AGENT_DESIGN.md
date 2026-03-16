@@ -52,8 +52,9 @@ To prevent hallucinations and reasoning errors from the final Judge, a condition
 
 ## 4. Potential New Agents
 
-1. **Macro Watcher**: Provides a daily "Global Market State" to all agents.
-2. **Backtest Validator**: Cross-references signals with historical stock reactions.
+1. **Portfolio Agent**: Acts as an **Advisory Risk Manager**. It reviews the user's manually maintained stock portfolio against intelligence from the Signal and Debate agents. It generates non-executable advisory recommendations (`BUY MORE`, `REDUCE`, `HOLD`, `EXIT`) and applies risk constraints (maximum position sizing, diversification). The agent relies entirely on manual user inputs (via a simple UI) for state tracking.
+2. **Macro Watcher**: Provides a daily "Global Market State" to all agents.
+3. **Backtest Validator**: Cross-references signals with historical stock reactions.
 
 ---
 **Senior Architect Note**: Implementing the **Gatekeeper** and **Structural Contract** provides the highest immediate ROI for reliability and cost reduction.

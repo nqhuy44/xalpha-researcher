@@ -234,12 +234,22 @@ def generate_html_report(ticker: str, verdict: Verdict, rounds: List[DebateRound
 
     def get_color_for_text(text: str) -> str:
         t = text.lower()
-        if "tiềm năng" in t or "mua" in t:
+        if "tiềm năng" in t:
             return "var(--bull-color)"
-        elif "rủi ro" in t or "bán" in t:
+        elif "khả quan" in t:
+            return "#a3e635" # Lime green
+        elif "trung lập" in t:
+            return "#94a3b8" # Slate
+        elif "rủi ro" in t:
             return "var(--bear-color)"
-        elif "an toàn" in t or "giữ" in t or "theo dõi" in t:
-            return "#f59e0b" # amber/yellow for neutral/hold
+        elif "an toàn" in t:
+            return "#38bdf8" # Sky blue
+        
+        # Fallbacks for actions
+        if "mua" in t: return "var(--bull-color)"
+        if "bán" in t: return "var(--bear-color)"
+        if "giữ" in t or "theo dõi" in t: return "#f59e0b"
+        
         return "var(--text-main)"
 
     def clean_text(text: str) -> str:

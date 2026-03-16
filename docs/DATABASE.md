@@ -24,9 +24,7 @@ erDiagram
     NEWS_ARTICLE ||--o{ SENTIMENT_SCORE : has
     DEBATE_VERDICT ||--o{ DEBATE_RECORD : generated_from
 
-    PORTFOLIO ||--o{ POSITION : holds
-    POSITION }o--|| COMPANY : references
-    PORTFOLIO ||--o{ ALERT : generates
+    PORTFOLIO_POSITIONS }o--|| COMPANY : references
 
     COMPANY {
         uuid id PK
@@ -131,6 +129,16 @@ erDiagram
         text judge_synthesis
         boolean is_active
         timestamp created_at
+    }
+
+    PORTFOLIO_POSITIONS {
+        uuid id PK
+        varchar symbol FK
+        int shares
+        float avg_price
+        varchar notes
+        timestamp created_at
+        timestamp updated_at
     }
 
     COMPANY ||--o{ FINANCIAL_REPORT : has

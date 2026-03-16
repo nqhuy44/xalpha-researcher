@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Any, Optional, Tuple, Callable, Awaitable, List
 from src.agents.analyst.state import AnalystState, Verdict, DebateRound, RefereeDecision
 from src.agents.analyst.graph import debate_graph
+from src.agents.portfolio.engine import PortfolioEngine
 
 logger = logging.getLogger(__name__)
 
@@ -137,9 +138,19 @@ class DebateEngine:
                 try:
                     async with async_session_factory() as session:
                         repo = VerdictRepository(session)
-                        await repo.save_verdict(ticker, verdict_obj, latest_referee)
+                        db_verdict = await repo.save_verdict(ticker, verdict_obj, latest_referee, final_rounds_list, referee_history)
                 except Exception as e:
                     logger.error(f"failed_to_persist_verdict for {ticker}: {e}")
+                    db_verdict = None
+                    
+                # ALWAYS TRIGGER PORTFOLIO AGENT so the UI gets a PortfolioSuggestion record
+                logger.info("Triggering Portfolio workflow for PortfolioSuggestion tracking")
+                try:
+                    port_engine = PortfolioEngine()
+                    port_state = await port_engine.process_signal(ticker, verdict_obj, verdict_id=db_verdict.id if db_verdict else None)
+                    logger.info(f"Portfolio execution status: {port_state.execution_status if port_state else 'None'}")
+                except Exception as e:
+                    logger.error(f"Portfolio workflow failed to trigger: {e}")
                 
                 return verdict_obj, referee_history, transcript_str, final_rounds_list
                 

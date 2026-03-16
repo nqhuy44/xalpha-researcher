@@ -194,31 +194,25 @@ class VnstockClient:
 
     async def get_all_tickers(self) -> List[str]:
         """
-        Fetches active stock ticker symbols, filtered to high-quality/liquid universes:
-        VN100 (VN30 + VNMIDCAP on HOSE) and HNX30.
-        This drops UPCOM and penny stocks.
+        Fetches active stock ticker symbols on HSX and HNX markets.
+        Filtering out UPCOM, CW, ETF, and UNIT_TRUST to get exactly ~700 premium/midcap stocks.
         """
         try:
             lst = vnstock.Listing("VCI")
             await asyncio.sleep(settings.vnstock.req_delay)
-            # Get VN100 and HNX30 series
-            vn100 = lst.symbols_by_group("VN100")
-            await asyncio.sleep(settings.vnstock.req_delay)
-            hnx30 = lst.symbols_by_group("HNX30")
+            df = lst.symbols_by_exchange()
             await asyncio.sleep(settings.vnstock.req_delay)
             
-            tickers = []
-            if vn100 is not None and not vn100.empty:
-                tickers.extend(vn100.tolist())
-            if hnx30 is not None and not hnx30.empty:
-                tickers.extend(hnx30.tolist())
+            if df is not None and not df.empty:
+                df_filtered = df[(df['exchange'].isin(['HSX', 'HNX'])) & (df['type'] == 'STOCK')]
+                tickers = df_filtered['symbol'].tolist()
                 
-            # Remove duplicates just in case, sort alphabetically
-            unique_tickers = sorted(list(set(tickers)))
-            
-            if unique_tickers:
-                logger.info(f"Loaded {len(unique_tickers)} premium tickers (VN100 + HNX30)")
-                return unique_tickers
+                # Remove duplicates just in case, sort alphabetically
+                unique_tickers = sorted(list(set(tickers)))
+                
+                if unique_tickers:
+                    logger.info(f"Loaded {len(unique_tickers)} premium tickers (HSX + HNX stocks)")
+                    return unique_tickers
                 
         except Exception as e:
             logger.error(f"Error fetching ticker list: {e}", exc_info=True)

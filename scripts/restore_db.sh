@@ -14,7 +14,7 @@ BACKUP_FILE="$1"
 usage() {
     echo "Usage: ./restore_db.sh <backup_file>"
     echo "  <backup_file>: Path to the postgres backup file (.sql.gz)"
-    echo "  The script will detect if it's a 'full', 'news', or 'financial' backup based on the filename."
+    echo "  The script will detect if it's a 'full', 'news', 'financial', 'debate', or 'portfolio' backup based on the filename."
     exit 1
 }
 
@@ -55,10 +55,16 @@ restore_postgres() {
     local type="unknown"
     if [[ $filename == full_* ]]; then
         type="full"
+    elif [[ $filename == reports_* ]]; then
+        type="reports"
     elif [[ $filename == news_* ]]; then
         type="news"
     elif [[ $filename == financial_* ]]; then
         type="financial"
+    elif [[ $filename == debate_* ]]; then
+        type="debate"
+    elif [[ $filename == portfolio_* ]]; then
+        type="portfolio"
     else
         echo "Warning: Extension-based type detection failed. Assuming generic/full."
         type="full"
@@ -71,8 +77,36 @@ restore_postgres() {
     if [ "$type" == "full" ]; then
         echo "Resetting public schema for FULL restore..."
         docker exec -i "$container_id" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB_NAME" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+    elif [ "$type" != "reports" ] && [ "$type" != "unknown" ]; then
+        local tables=""
+        case $type in
+            news)
+                tables="news_articles"
+                ;;
+            financial)
+                tables="financial_reports, company_profiles, stock_eod, stock_trading_stats, commodity_prices, macro_indicators, market_index_stats, mutual_fund_nav"
+                ;;
+            debate)
+                tables="debate_verdicts"
+                ;;
+            portfolio)
+                tables="portfolio_positions, portfolio_suggestions"
+                ;;
+        esac
+
+        if [ -n "$tables" ]; then
+            echo "Truncating tables: $tables..."
+            docker exec -i "$container_id" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB_NAME" -c "TRUNCATE TABLE $tables CASCADE;"
+        fi
     fi
     
+    if [ "$type" == "reports" ]; then
+        echo "Restoring $type files..."
+        tar -xzf "$BACKUP_FILE" -C "$(readlink -f "$SCRIPT_DIR/..")"
+        echo "File $type restore completed!"
+        return 0
+    fi
+
     echo "Importing data..."
     if command -v gzcat >/dev/null 2>&1; then
         ZCAT="gzcat"

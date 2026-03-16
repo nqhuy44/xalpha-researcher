@@ -58,121 +58,188 @@ services:
   # ==========================================================================
   # Init Container: DB Migration (runs once, then exits)
   # ==========================================================================
-  # migrator:
-  #   image: nqh44/xalpha-researcher:${VERSION:-latest}
-  #   container_name: xalpha-migrator
-  #   command: alembic upgrade head
-  #   env_file: .env
-  #   environment:
-  #     - POSTGRES__HOST=postgres
-  #     - POSTGRES__PORT=5432
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.2'
-  #         memory: 128M
-  #   logging:
-  #     driver: "json-file"
-  #     options:
-  #       max-size: "10m"
-  #       max-file: "3"
+  migrator:
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-migrator
+    command: alembic upgrade head
+    env_file: .env
+    environment:
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ==========================================================================
   # Application Services (each runs independently)
   # ==========================================================================
 
+  # Next.js Dashboard: Modern UI for Portfolio and Analysis
+  dashboard:
+    image: nqh44/xalpha-dashboard:${VERSION:-latest}
+    container_name: xalpha-dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD__PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://${POSTGRES__USER:-xalpha}:${POSTGRES__PASSWORD:-xalpha_dev}@postgres:5432/${POSTGRES__DB:-xalpha}
+      - INTERNAL_AI_URL=http://ai-engine:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ai-engine:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # AI Engine (Internal): Handles core analysis logic, proxied by Dashboard
+  ai-engine:
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-ai-engine
+    restart: unless-stopped
+    command: ["python", "-m", "src.api.main"]
+    ports:
+      - "${API__PORT:-8000}:8000"
+    env_file: .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # Telegram Bot: Receives user commands, serves queries
-  # telegram-bot:
-  #   image: nqh44/xalpha-researcher:${VERSION:-latest}
-  #   container_name: xalpha-telegram-bot
-  #   restart: unless-stopped
-  #   command: ["python", "-m", "src.interfaces.telegram.bot"]
-  #   env_file: .env
-  #   environment:
-  #     - TZ=Asia/Ho_Chi_Minh
-  #     - POSTGRES__HOST=postgres
-  #     - POSTGRES__PORT=5432
-  #     - REDIS__HOST=redis
-  #     - REDIS__PORT=6379
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     migrator:
-  #       condition: service_completed_successfully
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'
-  #         memory: 256M
-  #   logging:
-  #     driver: "json-file"
-  #     options:
-  #       max-size: "10m"
-  #       max-file: "3"
+  telegram-bot:
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-telegram-bot
+    restart: unless-stopped
+    command: ["python", "-m", "src.interfaces.telegram.bot"]
+    env_file: .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Financial Worker: Daily stock data sync (EOD, Profiles, Reports, Market Intelligence)
-  # financial-worker:
-  #   image: nqh44/xalpha-researcher:${VERSION:-latest}
-  #   container_name: xalpha-financial-worker
-  #   restart: unless-stopped
-  #   command: ["python", "-m", "src.agents.financial.worker"]
-  #   env_file: .env
-  #   environment:
-  #     - TZ=Asia/Ho_Chi_Minh
-  #     - POSTGRES__HOST=postgres
-  #     - POSTGRES__PORT=5432
-  #     - REDIS__HOST=redis
-  #     - REDIS__PORT=6379
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     migrator:
-  #       condition: service_completed_successfully
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '1.0'
-  #         memory: 512M
-  #   logging:
-  #     driver: "json-file"
-  #     options:
-  #       max-size: "10m"
-  #       max-file: "3"
+  financial-worker:
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-financial-worker
+    restart: unless-stopped
+    command: ["python", "-m", "src.agents.financial.worker"]
+    env_file: .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # News Scheduler: Periodic news collection, LLM summarization, Telegram reporting
-  # news-scheduler:
-  #   image: nqh44/xalpha-researcher:${VERSION:-latest}
-  #   container_name: xalpha-news-scheduler
-  #   restart: unless-stopped
-  #   command: ["python", "-m", "src.agents.news.scheduler"]
-  #   env_file: .env
-  #   environment:
-  #     - TZ=Asia/Ho_Chi_Minh
-  #     - POSTGRES__HOST=postgres
-  #     - POSTGRES__PORT=5432
-  #     - REDIS__HOST=redis
-  #     - REDIS__PORT=6379
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     migrator:
-  #       condition: service_completed_successfully
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'
-  #         memory: 256M
-  #   logging:
-  #     driver: "json-file"
-  #     options:
-  #       max-size: "10m"
-  #       max-file: "3"
+  news-scheduler:
+    image: nqh44/xalpha-researcher:${VERSION:-latest}
+    container_name: xalpha-news-scheduler
+    restart: unless-stopped
+    command: ["python", "-m", "src.agents.news.scheduler"]
+    env_file: .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - POSTGRES__HOST=postgres
+      - POSTGRES__PORT=5432
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

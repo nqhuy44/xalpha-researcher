@@ -229,7 +229,8 @@ class TelegramBot:
             
         ticker = context.args[0].upper()
         
-        rounds = 1
+        from src.config.settings import settings
+        rounds = settings.debate.max_rebuttals
         if len(context.args) > 1 and context.args[1].isdigit():
             rounds = int(context.args[1])
             # Limit rounds to prevent abuse/too long generation
