@@ -13,9 +13,18 @@ from src.agents.analyst.state import Verdict
 
 logger = logging.getLogger(__name__)
 
+# B7: gate the LLM-driven graph on whether the verdict is actually actionable.
+# - If the user already holds the ticker, we MUST evaluate (could be a sell/reduce signal).
+# - If they don't hold it, the only useful action is a buy candidate, which requires a
+#   bullish verdict above a confidence floor. Otherwise the graph would burn a Pro call
+#   to conclude "no action".
+ACTIONABLE_DECISIONS = {"Tiềm năng", "Khả quan"}
+PORTFOLIO_TRIGGER_CONFIDENCE = 70  # aligned with the T2 verdict-cache threshold
+
+
 class PortfolioEngine:
     """Facade for executing the Portfolio Agent graph based on Analyst signals."""
-    
+
     async def process_signal(self, ticker: str, verdict: Verdict, verdict_id: Optional[uuid.UUID] = None) -> Optional[PortfolioState]:
         """
         Gathers portfolio context and runs the Portfolio Graph.
@@ -81,7 +90,23 @@ class PortfolioEngine:
         except Exception as e:
             logger.error(f"Failed to fetch portfolio context: {e}")
             return None
-            
+
+        # B7: short-circuit before the LLM graph if the verdict isn't actionable for this user.
+        # We have current_positions in hand at this point — the position lookup above is cheap
+        # SQL; the graph below is the Pro call we're trying to avoid burning on dead-end cases.
+        is_held = ticker in current_positions
+        is_buy_candidate = (
+            verdict.decision in ACTIONABLE_DECISIONS
+            and verdict.confidence_score >= PORTFOLIO_TRIGGER_CONFIDENCE
+        )
+        if not (is_held or is_buy_candidate):
+            logger.info(
+                f"Skipping Portfolio graph for {ticker}: not held and verdict={verdict.decision!r} "
+                f"confidence={verdict.confidence_score} below actionable threshold "
+                f"(decisions={sorted(ACTIONABLE_DECISIONS)}, min_conf={PORTFOLIO_TRIGGER_CONFIDENCE})."
+            )
+            return None
+
         # 2. Map Analyst Verdict to AnalystSignal
         signal = AnalystSignal(
             symbol=ticker,

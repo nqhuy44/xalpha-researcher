@@ -143,12 +143,16 @@ class DebateEngine:
                     logger.error(f"failed_to_persist_verdict for {ticker}: {e}")
                     db_verdict = None
                     
-                # ALWAYS TRIGGER PORTFOLIO AGENT so the UI gets a PortfolioSuggestion record
-                logger.info("Triggering Portfolio workflow for PortfolioSuggestion tracking")
+                # Trigger Portfolio agent. The engine itself short-circuits when the verdict
+                # isn't actionable for this user (not held + non-bullish or low-confidence) —
+                # see ACTIONABLE_DECISIONS / PORTFOLIO_TRIGGER_CONFIDENCE in PortfolioEngine.
+                # In that case `port_state` is None and no PortfolioSuggestion row is created,
+                # which is the correct UI signal (no action recommended).
+                logger.info("Triggering Portfolio workflow")
                 try:
                     port_engine = PortfolioEngine()
                     port_state = await port_engine.process_signal(ticker, verdict_obj, verdict_id=db_verdict.id if db_verdict else None)
-                    logger.info(f"Portfolio execution status: {port_state.execution_status if port_state else 'None'}")
+                    logger.info(f"Portfolio execution status: {port_state.execution_status if port_state else 'skipped'}")
                 except Exception as e:
                     logger.error(f"Portfolio workflow failed to trigger: {e}")
                 

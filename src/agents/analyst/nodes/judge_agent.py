@@ -1,9 +1,8 @@
 import logging
-import json
-from typing import Dict, Any
-from langchain_core.messages import SystemMessage, HumanMessage
+from typing import Any, Dict
 
 from src.agents.analyst.state import AnalystState, Verdict
+from src.agents.analyst.utils.debate_formatting import format_debate_transcript
 from src.services.llm import LLMService
 
 logger = logging.getLogger(__name__)
@@ -11,33 +10,9 @@ logger = logging.getLogger(__name__)
 async def judge_agent_node(state: AnalystState) -> Dict[str, Any]:
     """The Judge Agent: Evaluates the debate and produces the final Verdict."""
     logger.info(f"Judge Agent scoring the debate for {state.ticker}...")
-    
+
     llm = LLMService()
-    
-    # Format the entire debate history for the Judge
-    debate_transcript = []
-    
-    # Sort rounds just in case
-    sorted_rounds = sorted(state.rounds, key=lambda x: x.round_number)
-    
-    for r in sorted_rounds:
-        debate_transcript.append(f"\n--- ROUND {r.round_number} ---")
-        if r.round_number == 1:
-            debate_transcript.append("BULL OPENING ARGUMENTS:")
-            for a in r.bull_arguments:
-                debate_transcript.append(f"- [Strength {a.strength}/10] {a.claim}\n  Evidence: {a.evidence}")
-            debate_transcript.append("\nBEAR OPENING ARGUMENTS:")
-            for a in r.bear_arguments:
-                debate_transcript.append(f"- [Strength {a.strength}/10] {a.claim}\n  Evidence: {a.evidence}")
-        else:
-            debate_transcript.append("BULL REBUTTALS:")
-            for rb in r.bull_rebuttals:
-                debate_transcript.append(f"- Target: {rb.target_claim}\n  Counter: {rb.counter_evidence}")
-            debate_transcript.append("\nBEAR REBUTTALS:")
-            for rb in r.bear_rebuttals:
-                debate_transcript.append(f"- Target: {rb.target_claim}\n  Counter: {rb.counter_evidence}")
-                
-    transcript_str = "\n".join(debate_transcript)
+    transcript_str = format_debate_transcript(state.rounds)
     
     system_prompt = llm.load_prompt("judge_system.txt")
     user_prompt = f"TICKER: {state.ticker}\n\nRAW CONTEXT DATA:\n{state.context}\n\nDEBATE TRANSCRIPT:\n{transcript_str}\n\n"

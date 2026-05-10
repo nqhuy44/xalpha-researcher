@@ -14,6 +14,17 @@ The Portfolio Agent **must never** execute trades automatically. Its explicit pu
 The Portfolio Agent operates on a schedule or user prompt to:
 
 1.  **Read Current Holdings**: Fetches the user's manually tracked portfolio from the database.
+
+### 2.1 Trigger Conditions (analyst → portfolio handoff)
+
+The agent's LLM graph is **gated by an actionability check** to avoid burning Pro-tier calls on dead-end cases. After the analyst's `DebateEngine` produces a verdict, `PortfolioEngine.process_signal` runs only when at least one of:
+
+- `ticker in current_positions` — the user already holds it, so a sell / reduce / hold decision must always be evaluated; **or**
+- `verdict.decision ∈ {"Tiềm năng", "Khả quan"}` **and** `verdict.confidence_score ≥ 70` — the verdict is bullish enough that this could become a buy candidate.
+
+If neither condition is met (e.g., the user doesn't hold the ticker and the verdict is "Trung lập" / "Rủi ro" / "An toàn", or confidence is below the threshold), `process_signal` short-circuits after the cheap position fetch and returns `None`. No `PortfolioSuggestion` row is created — that is the correct UI signal: "no action recommended". The dashboard's `AIAnalysisList` already filters suggestions by currently-held symbols, so the absence of a row is non-disruptive.
+
+The actionable-decision set and confidence threshold are defined as module-level constants in `src/agents/portfolio/engine.py` (`ACTIONABLE_DECISIONS`, `PORTFOLIO_TRIGGER_CONFIDENCE`); the threshold is intentionally aligned with the `T2` verdict-cache threshold so caching and gating share one number.
 2.  **Gather Intelligence**: Fetches the latest outputs from:
     *   **Signal Agent**: Quantitative ratings, trend strength, CANSLIM score.
     *   **Debate Agent (Analyst)**: Qualitative Verdicts ("Tiềm năng", "Rủi ro").

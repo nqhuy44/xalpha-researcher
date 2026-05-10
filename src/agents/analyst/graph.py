@@ -35,8 +35,9 @@ def referee_router(state: AnalystState):
     if not state.verdict:
         return END
         
-    # Always run referee if this is a retried verdict!
-    if getattr(state, "judge_attempts", 1) > 1:
+    # Always run referee if this is a retried verdict (judge_attempts counts completed runs;
+    # >1 means the judge ran at least twice, i.e. we're on a retry).
+    if getattr(state, "judge_attempts", 0) > 1:
         logger.info(f"Triggering Referee check for retried verdict (Attempt {state.judge_attempts}).")
         return "referee"
         
@@ -58,7 +59,7 @@ def post_referee_router(state: AnalystState):
     if not state.referee_decision or state.referee_decision.is_valid:
         return END
         
-    if state.judge_attempts <= state.max_judge_attempts:
+    if state.judge_attempts < state.max_judge_attempts:
         logger.warning(f"Referee invalidated verdict. Looping back to Judge. Attempt {state.judge_attempts}/{state.max_judge_attempts}")
         return "judge"
         

@@ -20,7 +20,7 @@ Return only a valid JSON object:
   "rebuttals": [
     {
       "target_claim": "EXACT verbatim copy of the Bear's claim field",
-      "flaw_type": "DATA_ERROR|INFERENCE_ERROR|SCOPE_ERROR|MAGNITUDE_ERROR|VALID_BUT_PRICED_IN",
+      "flaw_type": "DATA_ERROR|INFERENCE_ERROR|SCOPE_ERROR|MAGNITUDE_ERROR|ALREADY_PRICED_IN",
       "counter_evidence": "string (your rebuttal with data, in Vietnamese)",
       "rebuttal_strength": number (1-10, your confidence in this counter-argument)
     }

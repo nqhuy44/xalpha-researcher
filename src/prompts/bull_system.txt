@@ -56,7 +56,7 @@ Return only a valid JSON object:
       "type": "MACRO|SECTOR|FUNDAMENTAL|TECHNICAL|CATALYST",
       "claim": "string (the main point, in Vietnamese)",
       "evidence": "string (specific data and logical chain, in Vietnamese)",
-      "acknowledged_risk": "string (the biggest counter to this argument, in Vietnamese)",
+      "acknowledged_counter": "string (the biggest opposing point you concede, in Vietnamese)",
       "strength": number (1-10)
     }
   ]

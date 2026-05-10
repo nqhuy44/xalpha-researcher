@@ -93,15 +93,21 @@ async def aggregate_data_node(state: AnalystState) -> Dict[str, Any]:
                 context_parts.append(f"{latest.rsi:.2f}|{latest.macd:.2f}|{latest.macd_signal:.2f}|{latest.macd_hist:.2f}")
 
         # 4. Recent News (Last 30 days) - TICKER SPECIFIC
+        # Word-boundary regex avoids false positives like "BCG vaccine" matching ticker BCG,
+        # or 3-letter tickers (VIC, HAG, …) hitting random word fragments. `~*` is case-insensitive
+        # POSIX regex; `\y` is the Postgres word-boundary anchor on either side.
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         news_stmt = text("""
             SELECT title, description, ai_summary, published_at, domain, is_summarized
             FROM news_articles
             WHERE published_at >= :d
-            AND (description ILIKE :t OR title ILIKE :t OR ai_summary ILIKE :t)
+            AND (description ~* :t OR title ~* :t OR ai_summary ~* :t)
             ORDER BY published_at DESC LIMIT 10
         """)
-        search_term = f"%{ticker}%"
+        # Defensive sanitize: tickers are alphanumeric on HOSE/HNX/UPCOM; strip anything else
+        # so the value can't break the regex pattern.
+        safe_ticker = "".join(ch for ch in ticker if ch.isalnum())
+        search_term = rf"\y{safe_ticker}\y"
         news_res = await session.execute(news_stmt, {"d": thirty_days_ago, "t": search_term})
         articles = news_res.fetchall()
         context_parts.append("\n[TICKER_NEWS_30D]\\nDate|Domain|Title|Summary")
@@ -114,8 +120,10 @@ async def aggregate_data_node(state: AnalystState) -> Dict[str, Any]:
         else:
             context_parts.append("-|NONE|No highly relevant news found|N/A")
         
-        # 4b. GLOBAL / MACRO News (Last 7 days) - 5 articles per domain PER DAY for deep coverage
-        # This ensures we don't miss major events across different fields over the week.
+        # 4b. GLOBAL / MACRO News (Last 7 days)
+        # Hard cap: 2 articles per (domain, day), then overall LIMIT to keep context bounded.
+        # Without these the block could reach ~280 rows × N domains and dominate every node's
+        # input — see backlog T11 for the longer-term replacement (pre-synthesized macro digest).
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         global_news_stmt = text("""
             SELECT title, ai_summary, published_at, domain, is_summarized FROM (
@@ -123,12 +131,13 @@ async def aggregate_data_node(state: AnalystState) -> Dict[str, Any]:
                        ROW_NUMBER() OVER (PARTITION BY domain, published_at::date ORDER BY published_at DESC) as rn
                 FROM news_articles
                 WHERE published_at >= :d
-            ) ranked WHERE rn <= 5
+            ) ranked WHERE rn <= 2
             ORDER BY published_at DESC
+            LIMIT 30
         """)
         global_news_res = await session.execute(global_news_stmt, {"d": seven_days_ago})
         global_articles = global_news_res.fetchall()
-        context_parts.append("\n[GLOBAL_MACRO_NEWS_7D] (5 articles per field/category per day - Deep Context)\nDate|Domain|Title|Summary")
+        context_parts.append("\n[GLOBAL_MACRO_NEWS_7D] (top 2/day per domain, capped at 30 most recent)\nDate|Domain|Title|Summary")
         if global_articles:
             for a in global_articles:
                 date_str = a.published_at.strftime('%Y-%m-%d')
@@ -219,7 +228,7 @@ async def aggregate_data_node(state: AnalystState) -> Dict[str, Any]:
 
 
     full_context = "\n".join(context_parts)
-    logger.info(f"Generated {len(full_context)} characters of TOON context for {ticker}.")
+    logger.info(f"Generated {len(full_context)} characters of pipe-tabular context for {ticker}.")
     
     # Update the graph state
     return {"context": full_context}
