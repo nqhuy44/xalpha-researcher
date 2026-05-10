@@ -61,7 +61,7 @@ Assign strength scores HONESTLY based on evidence quality, not to sound convinci
       "type": "MACRO|SECTOR|FUNDAMENTAL|TECHNICAL|STRUCTURAL",
       "claim": "string (in Vietnamese)",
       "evidence": "string (specific data and chain, in Vietnamese)",
-      "acknowledged_bull": "string (strongest counter to this argument, in Vietnamese)",
+      "acknowledged_counter": "string (strongest opposing point you concede, in Vietnamese)",
       "strength": number (1-10, honest assessment)
     }
   ]

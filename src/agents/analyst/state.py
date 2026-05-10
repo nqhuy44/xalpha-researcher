@@ -1,19 +1,39 @@
 from datetime import datetime
-from typing import Annotated, Dict, Any, List, Optional
+from typing import Annotated, Dict, Any, List, Literal, Optional
 from pydantic import BaseModel, Field
 import operator
 
+# Slot 1-4 are shared by both sides; slot 5 is CATALYST for Bull, STRUCTURAL for Bear.
+ArgumentType = Literal["MACRO", "SECTOR", "FUNDAMENTAL", "TECHNICAL", "CATALYST", "STRUCTURAL"]
+
+# Normalized across both rebuttal prompts. ALREADY_PRICED_IN replaces both
+# the Bull-side "VALID_BUT_PRICED_IN" and the Bear-side "ALREADY_PRICED_IN".
+FlawType = Literal[
+    "DATA_ERROR",
+    "INFERENCE_ERROR",
+    "SCOPE_ERROR",
+    "MAGNITUDE_ERROR",
+    "ALREADY_PRICED_IN",
+]
+
 class Argument(BaseModel):
-    """A single argument made by an agent in the debate."""
+    """A single argument made by Bull or Bear in the opening round."""
+    type: ArgumentType = Field(description="Which analytical layer this argument belongs to.")
     claim: str = Field(description="A concise summary of the point being made.")
     evidence: str = Field(description="Specific data points or facts backing the claim.")
-    strength: int = Field(description="Self-assessed strength of this argument from 1-10.")
+    acknowledged_counter: str = Field(
+        description="The strongest opposing point this side concedes — used for intellectual honesty.",
+    )
+    strength: int = Field(ge=1, le=10, description="Self-assessed strength of this argument from 1-10.")
 
 class Rebuttal(BaseModel):
-    """A rebuttal to a specific opponent's claim."""
-    target_claim: str = Field(description="The opponent's original claim being attacked.")
-    flaw_type: str = Field(description="The type of logical flaw identified, e.g., DATA_ERROR, SCOPE_ERROR.")
-    counter_evidence: str = Field(description="Data and logic used to destroy the opponent's claim.")
+    """A rebuttal to a specific opponent's claim, produced in rebuttal rounds."""
+    target_claim: str = Field(description="Verbatim copy of the opponent's claim being attacked.")
+    flaw_type: FlawType = Field(description="The type of logical flaw identified.")
+    counter_evidence: str = Field(description="Data and logic used to dismantle the opponent's claim.")
+    rebuttal_strength: int = Field(
+        ge=1, le=10, description="Self-assessed strength of this rebuttal from 1-10.",
+    )
 
 class DebateRound(BaseModel):
     """A single round of debate."""
@@ -85,7 +105,7 @@ class AnalystState(BaseModel):
     current_round: int = 1
     max_rounds: int = 3
     confidence_threshold: float = 0.75
-    judge_attempts: int = 1
+    judge_attempts: int = 0  # number of completed judge runs (incremented inside judge_agent_node)
     max_judge_attempts: int = 2
     
     verdict: Optional[Verdict] = None

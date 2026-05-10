@@ -1,0 +1,71 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+.next/
+
+# Lockfiles & generated dependency manifests (huge, low signal)
+poetry.lock
+package-lock.json
+requirements.txt
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ML artifacts
+*.h5
+*.pkl
+*.joblib
+*.onnx
+*.bin
+*.safetensors
+models/checkpoints/
+data/raw/
+data/processed/
+
+# Logs
+logs/
+*.log
+
+# Docker volumes & dumps
+pgdata/
+redisdata/
+backups/
+reports/
+
+# Agent / tool state
+.agent/
+.gemini/
+.claude/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
