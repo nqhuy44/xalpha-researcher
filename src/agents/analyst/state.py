@@ -16,6 +16,11 @@ FlawType = Literal[
     "ALREADY_PRICED_IN",
 ]
 
+# Mirrors referee_system.txt ACTION DEFINITIONS. VOID = Judge repeated the same
+# critical errors after an OVERRIDE retry; treat as a hard-stop in the graph
+# rather than another retry loop.
+RefereeAction = Literal["CONFIRM", "OVERRIDE", "VOID"]
+
 class Argument(BaseModel):
     """A single argument made by Bull or Bear in the opening round."""
     type: ArgumentType = Field(description="Which analytical layer this argument belongs to.")
@@ -88,7 +93,7 @@ class RefereeDecision(BaseModel):
     hallucinations_detected: List[str] = Field(description="Specific facts the judge used that do not exist in the provided evidence context or debate round arguments")
     logic_flaws: List[str] = Field(description="Specific logical inconsistencies in the judge's reasoning")
     bias_assessment: str = Field(description="Assessment of whether the judge favored one side unfairly despite equal evidence")
-    action: str = Field(description="Must be exactly one of: 'CONFIRM', 'OVERRIDE', or 'INCONCLUSIVE'")
+    action: RefereeAction = Field(description="Must be exactly one of: 'CONFIRM', 'OVERRIDE', or 'VOID'")
     referee_synthesis: str = Field(description="Brief explanation of why the referee decided to confirm, override, or label it inconclusive")
 
 class AnalystState(BaseModel):

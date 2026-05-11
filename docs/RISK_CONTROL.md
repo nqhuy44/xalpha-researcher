@@ -17,7 +17,11 @@ This document outlines the three layers of defense-in-depth implemented in the x
   - **Bear**: Argues the risk/prosecution thesis.
   - **Judge**: A high-order LLM (Gemini Pro) that determines the "Truth" by weighing conflicting arguments.
 - **Termination Condition**: Debate continues for `max_rebuttals` before the Judge node triggers.
-- **Fail-Safe**: If `confidence_score` < 75%, the signal is flagged "INCONCLUSIVE" and blocked from execution.
+- **Fail-Safe**: If `confidence_score` < 75%, the **Referee** node (`src/prompts/referee_system.txt`) audits the verdict for hallucinations, logical errors, and bias. Referee actions:
+  - `CONFIRM` → verdict stands.
+  - `OVERRIDE` → loop back to Judge for one retry (up to `max_judge_attempts`).
+  - `VOID` → hard-stop (Judge already failed a retry, or infrastructure error). The verdict is preserved but flagged.
+  Downstream gating happens in the Portfolio engine (`PORTFOLIO_TRIGGER_CONFIDENCE = 70`, see PORTFOLIO_AGENT.md), which short-circuits before any LLM call when the verdict isn't actionable.
 
 ## 3. L3 — Portfolio Constraint (Sizing Layer)
 **Goal**: Absolute capital protection.

@@ -64,21 +64,22 @@ These contradict the documented design and silently waste tokens or miscompute. 
   - Note: a previously-active `PortfolioSuggestion` row for a ticker is no longer auto-soft-deleted on skip (soft-delete still happens when a new row is being created). Practical impact is limited because the dashboard filters by currently-held symbols, but if it becomes a problem the cleanup is a one-line addition to the skip branch.
   - Impact: −1 Pro call on the meaningful fraction of debates that produce neutral/bearish verdicts on tickers the user doesn't hold. Effort: S.
 
-- [ ] **B8. Referee `VOID` action documented but not handled in graph.**
-  - File: `src/prompts/referee_system.txt` (defines VOID), `src/agents/analyst/graph.py:53-66` (only checks `is_valid`).
-  - VOID and OVERRIDE collapse into the same path. Decide if VOID should hard-stop with a special verdict, or remove it from the prompt.
+- [x] **B8. Referee `VOID` action documented but not handled in graph.** *(fixed 2026-05-11)*
+  - Files: `src/prompts/referee_system.txt` (defines VOID), `src/agents/analyst/graph.py:54-78`, `src/agents/analyst/state.py:19-23,98`, `src/agents/analyst/nodes/referee_agent.py:48-62`.
+  - VOID and OVERRIDE both have `is_valid=false`, but `post_referee_router` only inspected `is_valid` — so VOID retried the Judge instead of hard-stopping. Compounding this, `RefereeDecision.action` was typed as `'CONFIRM' | 'OVERRIDE' | 'INCONCLUSIVE'` (never matched the prompt), so any "VOID" output would have failed Pydantic validation silently.
+  - **Fix applied**: introduced `RefereeAction = Literal["CONFIRM", "OVERRIDE", "VOID"]` in `state.py`; tightened `RefereeDecision.action` to that Literal; `post_referee_router` now branches on `action` — VOID hard-stops with a clear log line, OVERRIDE retries within `max_judge_attempts`, CONFIRM ends. The infrastructure-failure fallback in `referee_agent.py` now emits VOID (not the no-longer-valid "INCONCLUSIVE") with a Vietnamese "Vô hiệu hóa:" synthesis prefix matching the prompt contract.
   - Effort: S.
 
-- [ ] **B9. Judge/Referee threshold inconsistency.**
-  - Files: `src/prompts/judge_system.txt:48-54` (Tiềm năng ≥ 8 pts) vs `src/prompts/referee_system.txt:36-40` (Tiềm năng > 10 pts).
-  - Two different thresholds → Referee can flag valid Judge verdicts as logic flaws.
-  - Fix: pick one set, reference it from a single shared prompt fragment.
+- [x] **B9. Judge/Referee threshold inconsistency.** *(fixed 2026-05-11)*
+  - Files: `src/prompts/judge_system.txt:48-54` (canonical), `src/prompts/referee_system.txt:36-40` (was divergent).
+  - Referee thresholds (Tiềm năng > 10 pts; Khả quan 3–15 pts; Trung lập < 5 pts; Rủi ro > 10 pts) didn't match Judge's table (Tiềm năng ≥ 8; Khả quan 3–7; Trung lập ≤ 2; Rủi ro ≥ 8). Referee could flag a perfectly-correct Judge verdict as a logic flaw on a 9-point gap (Judge says Tiềm năng, Referee says "should be Khả quan").
+  - **Fix applied**: rewrote the `Primary rule (quantitative)` block in `referee_system.txt` to match Judge exactly, including the "Long-term outlook NOT Bearish" gate on Tiềm năng and the "Long-term Bearish/Neutral required" gate on Rủi ro that Judge already enforces. Added an explicit lock-step note so a future change to one prompt forces a corresponding change to the other.
   - Effort: S.
 
-- [ ] **B10. Sector peers query peg date from primary ticker only.**
-  - File: `src/agents/analyst/nodes/data_aggregator.py:206-211`.
-  - `WHERE se.trade_date = (SELECT MAX(trade_date) FROM stock_eod WHERE ticker = :t)` — if a peer has a more recent close, it's missed; if the primary ticker hasn't traded today, peers show stale data.
-  - Fix: use each peer's own latest trade_date (`DISTINCT ON (ticker)`).
+- [x] **B10. Sector peers query peg date from primary ticker only.** *(fixed 2026-05-11)*
+  - File: `src/agents/analyst/nodes/data_aggregator.py:210-228`.
+  - `WHERE se.trade_date = (SELECT MAX(trade_date) FROM stock_eod WHERE ticker = :t)` filtered every peer to the *primary* ticker's last bar — peers that traded more recently were missed, and on days when the primary didn't trade peers showed stale (or zero) rows.
+  - **Fix applied**: switched to `DISTINCT ON (cp.ticker) ... ORDER BY cp.ticker, se.trade_date DESC` in an inner select, then the outer select re-orders by `market_cap DESC` and applies the `LIMIT 5`. Each peer now contributes its own most-recent bar regardless of the primary ticker's calendar. Block header still labels per-row dates so the LLM can see if a peer is stale.
   - Effort: S.
 
 ---
@@ -326,14 +327,14 @@ These contradict the documented design and silently waste tokens or miscompute. 
 
 If working through this slowly, this sequence minimizes rework. The guiding principle is **T17 — LEAN context first, encoding second**: optimize *what* you send before optimizing *how* you encode it.
 
-1. **B1–B6 done. Remaining quick fixes: B7, B8, B9, B10** — one afternoon.
+1. **B1–B10 done.** Section 1 quick-fixes complete.
 2. **I2 / O1** — token logging in place so you can *measure* every subsequent change. Without this, "did LEAN actually help?" is a guess.
 3. **T2 (verdict cache)**, **T6 (Flash for openings)** — large saving for low effort while you set up.
 4. **T1 (Gatekeeper)** + **I1 (semantic news, depends on B4)** — they share schema work and both reduce *what enters the pipeline*.
 5. **🟢 LEAN milestone — biggest single payoff. Do as one focused effort:** **T3 (MarketIntelligence)** + **T4 (truncated rebuttal)** + **T10 (compact triple)** + **T11 (macro digest)** + **T15 (deduped Judge transcript)**. This is the **T17** principle made concrete; targets a 5–10× input-token reduction across the debate.
 6. **T7 + T8 (Gemini context caching)** — wire only after LEAN, when the payload shape is stable; otherwise the cache key churns and savings collapse.
 7. **🟢 T16 pilot** — wire the (already-built) TOON encoder behind a feature gate, starting with Referee. Now compounds with LEAN instead of optimizing soon-to-be-deleted bytes.
-8. **T5 (deterministic Portfolio sizing)** + **B9 (threshold alignment)** — analytics-quality cleanup.
+8. **T5 (deterministic Portfolio sizing)** — analytics-quality cleanup.
 9. **T13 / T14 (news pre-filter / Stage-2 cap)** — news pipeline tuning (also part of LEAN, lower urgency than the analyst-side work).
 10. **I9 (corporate-action-aware EOD)** — data-integrity foundation; ideally land before any of the above caches a distorted EOD-derived number.
 11. **I3–I8** — research-quality features.
