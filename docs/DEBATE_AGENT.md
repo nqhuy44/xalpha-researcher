@@ -64,7 +64,11 @@ The system follows a state-machine logic with a fan-out/fan-in pattern:
 3. **Phase 3: Verdict**
    - **Judge Node**: Consolidates all rounds into a transcript. Performs evidence scoring and issues a final `Verdict` object.
 4. **Phase 4: Safety Verification (Conditional)**
-   - **Referee Node**: Evaluates the Judge's Verdict against the raw context and transcript. Triggered only when the Judge's `confidence_score < 75` OR the current verdict is a retry produced after a previous Referee `OVERRIDE` (i.e. `judge_attempts > 1`). Catches hallucinations, logical errors, and extreme bias without generating new financial arguments. On a retry-triggered run, Referee fires regardless of confidence so the corrected verdict is always re-audited; on an `OVERRIDE`, the graph loops back to Judge up to `max_judge_attempts` (default 2 = 1 initial + 1 retry).
+   - **Referee Node**: Evaluates the Judge's Verdict against the raw context and transcript. Triggered only when the Judge's `confidence_score < 75` OR the current verdict is a retry produced after a previous Referee `OVERRIDE` (i.e. `judge_attempts > 1`). Catches hallucinations, logical errors, and extreme bias without generating new financial arguments. On a retry-triggered run, Referee fires regardless of confidence so the corrected verdict is always re-audited. Referee `action` is one of `CONFIRM | OVERRIDE | VOID` (mirrored as a `Literal` on `RefereeDecision.action`):
+     - `CONFIRM` → verdict stands, graph ends.
+     - `OVERRIDE` → loop back to Judge up to `max_judge_attempts` (default 2 = 1 initial + 1 retry).
+     - `VOID` → hard-stop. Used when the Judge repeated the same critical error after an OVERRIDE retry, or when the Referee call itself errored. The latest verdict is preserved with `referee_decision` attached so downstream consumers can flag it; the graph does not loop again.
+     - **Threshold lock-step**: the decision-label thresholds in `referee_system.txt` MUST match `judge_system.txt` Step 4 exactly (Tiềm năng ≥ 8 pt gap, Khả quan 3–7, Trung lập ≤ 2, Rủi ro ≥ 8). A divergence here causes the Referee to flag perfectly-correct Judge verdicts as logic flaws — fix in both prompts together.
 
 ## 4. Technical State & Schema
 

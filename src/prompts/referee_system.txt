@@ -32,12 +32,14 @@ NOT a hallucination (do NOT flag):
 
 The Decision Label must be consistent with BOTH the quantitative scores AND the qualitative synthesis. A Judge may use their synthesis to resolve ties — this is legitimate and must NOT be flagged as a flaw.
 
-Primary rule (quantitative):
-- Tiềm năng: Bull > Bear by > 10 pts. Macro support required.
-- Khả quan: Bull > Bear by 3–15 pts. OR synthesis justifies positive bias with stated reasons.
-- Trung lập: Gap < 5 pts AND no strong qualitative swing factor. Default when data is sparse.
-- Rủi ro: Bear > Bull by > 10 pts. OR structural/macro risk dominates synthesis.
-- An toàn: Defensive characteristics explicitly stated. Low volatility, stable dividend noted.
+Primary rule (quantitative — MUST match judge_system.txt Step 4 thresholds exactly):
+- Tiềm năng: Bull > Bear by ≥ 8 pts. Macro/sector support required AND Long-term outlook NOT Bearish.
+- Khả quan: Bull > Bear by 3–7 pts. OR qualitative tiebreak applied with stated reason (see Qualitative Override Rule below).
+- Trung lập: Gap ≤ 2 pts OR mixed signals across horizons.
+- Rủi ro: Bear > Bull by ≥ 8 pts. ONLY valid if Long-term outlook is also Bearish or Neutral.
+- An toàn: Small gap AND defensive characteristics explicitly stated (low volatility, stable dividend).
+
+Note: thresholds above must stay in lock-step with judge_system.txt Step 4. If you would like to flag a label, first verify it against the Judge's table — using a different cutoff is itself a logic error on the Referee's part.
 
 CRITICAL — The Qualitative Override Rule:
 When Bull score and Bear score are within 1–5 points of each other, the Judge is PERMITTED to use qualitative reasoning to break the tie and choose "Khả quan" over "Trung lập" — as long as their judge_synthesis explicitly states WHY the bull case is stronger despite the close scores (e.g., macro tailwind, near-term catalyst, historical pattern).

@@ -207,15 +207,24 @@ async def aggregate_data_node(state: AnalystState) -> Dict[str, Any]:
             for v in vnindex_data:
                 context_parts.append(f"{v.trade_date.strftime('%Y-%m-%d')}|{v.close:,.0f}|{v.volume}")
         
-        # 6. Sector Peer Performance (same industry, last session)
+        # 6. Sector Peer Performance (same industry, each peer's own latest session)
+        # DISTINCT ON (ticker) with ORDER BY ticker, trade_date DESC pulls the most
+        # recent bar PER peer — avoids missing peers whose latest trade_date differs
+        # from the primary ticker's (e.g., peer traded today but primary didn't, or
+        # vice-versa). Wrapped in a subquery so we can re-sort by market_cap.
         if p and p.industry:
             sector_stmt = text("""
-                SELECT cp.ticker, cp.company_name, se.close, se.rsi, se.trade_date
-                FROM company_profiles cp
-                JOIN stock_eod se ON cp.ticker = se.ticker
-                WHERE cp.industry = :ind AND cp.ticker != :t
-                AND se.trade_date = (SELECT MAX(trade_date) FROM stock_eod WHERE ticker = :t)
-                ORDER BY cp.market_cap DESC NULLS LAST
+                SELECT ticker, company_name, close, rsi, trade_date
+                FROM (
+                    SELECT DISTINCT ON (cp.ticker)
+                           cp.ticker, cp.company_name, cp.market_cap,
+                           se.close, se.rsi, se.trade_date
+                    FROM company_profiles cp
+                    JOIN stock_eod se ON cp.ticker = se.ticker
+                    WHERE cp.industry = :ind AND cp.ticker != :t
+                    ORDER BY cp.ticker, se.trade_date DESC
+                ) latest_per_peer
+                ORDER BY market_cap DESC NULLS LAST
                 LIMIT 5
             """)
             sector_res = await session.execute(sector_stmt, {"ind": p.industry, "t": ticker})

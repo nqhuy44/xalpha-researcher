@@ -53,16 +53,30 @@ def referee_router(state: AnalystState):
 
 def post_referee_router(state: AnalystState):
     """
-    Decides whether to loop back to the Judge if the Referee invalidated the verdict, 
+    Decides whether to loop back to the Judge if the Referee invalidated the verdict,
     up to max_judge_attempts.
+
+    Action semantics (mirrors referee_system.txt):
+      - CONFIRM (is_valid=true) → END
+      - OVERRIDE (is_valid=false) → retry Judge if attempts remain
+      - VOID    (is_valid=false) → hard-stop. VOID means the Judge already had
+        a retry and repeated the same critical error, so another loop won't help.
     """
     if not state.referee_decision or state.referee_decision.is_valid:
         return END
-        
+
+    action = state.referee_decision.action
+    if action == "VOID":
+        logger.error(
+            f"Referee VOID for {state.ticker} after {state.judge_attempts} judge attempt(s). "
+            "Hard-stopping graph; verdict is preserved with referee_decision attached."
+        )
+        return END
+
     if state.judge_attempts < state.max_judge_attempts:
-        logger.warning(f"Referee invalidated verdict. Looping back to Judge. Attempt {state.judge_attempts}/{state.max_judge_attempts}")
+        logger.warning(f"Referee OVERRIDE. Looping back to Judge. Attempt {state.judge_attempts}/{state.max_judge_attempts}")
         return "judge"
-        
+
     logger.error("Max Judge attempts reached after Referee invalidations. Ending graph.")
     return END
 

@@ -48,12 +48,15 @@ async def referee_agent_node(state: AnalystState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Referee Agent failed validation query: {e}")
         # In case of failure, we return inconclusive to not crash the engine, but flag the issue
+        # Use VOID (not a retry) on infrastructure failure: looping back to the
+        # Judge can't fix an LLM/network outage, and the post_referee_router
+        # treats VOID as a hard-stop.
         emergency_decision = RefereeDecision(
             is_valid=False,
             hallucinations_detected=[],
             logic_flaws=[f"System error during referee check: {str(e)}"],
             bias_assessment="Unknown due to error",
-            action="INCONCLUSIVE",
-            referee_synthesis="Referee service failed. Manual review recommended."
+            action="VOID",
+            referee_synthesis="Vô hiệu hóa: Referee service failed. Manual review recommended."
         )
         return {"referee_decision": emergency_decision, "referee_history": [emergency_decision]}
