@@ -55,6 +55,8 @@ def AdversarialDebateAlgorithm(ticker, context, max_rounds):
 
 The system follows a state-machine logic with a fan-out/fan-in pattern:
 
+0. **Phase 0: Gatekeeper (L0 filter)**
+   - **Gatekeeper Node**: Applies rule-based checks before any LLM work. Short-circuits the graph to END if the ticker is on the warn-list, has no company data, has insufficient market cap or liquidity, or already has a fresh high-confidence verdict for today. No tokens consumed on failure.
 1. **Phase 1: Opening (Round 1)**
    - **Bull Node**: Generates 5 compelling reasons to BUY.
    - **Bear Node**: Generates 5 critical reasons to SELL.
@@ -112,13 +114,14 @@ The final structured output from the Judge:
 
 | Component | Responsibility |
 |---|---|
+| `gatekeeper_node.py` | L0 rule-based filter — the **first** LangGraph node. Runs 5 checks in order (WARN_LIST → NO_COMPANY_DATA → LOW_MARKET_CAP → LOW_VOLUME → CACHE_HIT). Short-circuits to END on any failure, setting `gatekeeper_passed=False` and `skip_reason`. Configured via `GatekeeperSettings` (`GATEKEEPER__*` env vars). |
 | `data_aggregator.py` | Fetches EOD, Financials, Sector Peers, and News into a unified string. News blocks: `[TICKER_NEWS_30D]` uses a Postgres word-boundary regex (`~* '\yTICKER\y'`) to avoid substring false positives like `BCGdebate`; `[GLOBAL_MACRO_NEWS_7D]` is capped at 2 articles per `(domain, day)` with an outer `LIMIT 30` to keep the macro section bounded across debates. |
 | `bull_agent.py` | Implementation of the long-term growth persona. |
 | `bear_agent.py` | Implementation of the risk-auditor/short-seller persona. |
 | `judge_agent.py` | Impartial arbiter using high-reasoning Gemini models. |
 | `referee_agent.py` | Safety verification layer that critically audits the judge's verdict for logic flaws and hallucinations. Runs conditionally to save tokens. |
 | `report_generator.py` | Converts the debate state into a modern responsive HTML report. |
-| `engine.py` | `DebateEngine` facade: generates `debate_run_id`, creates a `debate_traces` row (`status="running"`) before graph start, finalizes it (`status="completed"/"failed"`) with aggregated token counts and cost estimate after the graph exits. Emits O3 budget alert (`debate_token_budget_exceeded`) when total input tokens exceed `DEBATE_INPUT_TOKEN_BUDGET = 200_000`. |
+| `engine.py` | `DebateEngine` facade: generates `debate_run_id`, creates a `debate_traces` row (`status="running"`) before graph start, handles gatekeeper skip path (finalizes trace as "skipped", emits Vietnamese user message), finalizes on completion/failure with aggregated token counts and cost estimate. Emits O3 budget alert (`debate_token_budget_exceeded`) when total input tokens exceed `DEBATE_INPUT_TOKEN_BUDGET = 200_000`. |
 
 ## 6. Model Usage
 

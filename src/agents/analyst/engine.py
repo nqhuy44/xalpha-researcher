@@ -23,6 +23,19 @@ _MODEL_PRICE_PER_M: Dict[str, Tuple[float, float]] = {
     "gemini-1.5-flash": (0.075, 0.30),
 }
 
+_SKIP_MESSAGES = {
+    "WARN_LIST":        "⛔ {ticker} nằm trong danh sách cảnh báo và không thể phân tích.",
+    "LOW_MARKET_CAP":   "⚠️ {ticker} có vốn hóa quá thấp (dưới 100 tỷ VND). Bỏ qua.",
+    "LOW_VOLUME":       "⚠️ {ticker} có khối lượng giao dịch bình quân 30 ngày quá thấp (dưới 100k cổ phiếu/ngày). Bỏ qua.",
+    "CACHE_HIT":        "✅ {ticker} đã có phán quyết độ tin cậy cao trong phiên hôm nay. Không cần phân tích lại.",
+    "NO_COMPANY_DATA":  "❓ {ticker} chưa có dữ liệu công ty trong hệ thống. Vui lòng đồng bộ dữ liệu trước.",
+}
+
+def _skip_message(ticker: str, skip_reason: str) -> str:
+    template = _SKIP_MESSAGES.get(skip_reason, "⚠️ {ticker} bị bỏ qua bởi Gatekeeper ({reason}).")
+    return template.format(ticker=ticker, reason=skip_reason)
+
+
 def _estimate_cost(model: str, input_tok: int, output_tok: int) -> Optional[float]:
     model_lower = model.lower()
     for key, (in_price, out_price) in _MODEL_PRICE_PER_M.items():
@@ -209,6 +222,15 @@ class DebateEngine:
                              transcript_parts.append(msg)
                              if on_message:
                                  await on_message(msg)
+
+            # Gatekeeper short-circuit: graph exited without entering the debate.
+            if not final_state_raw.get("gatekeeper_passed", True):
+                skip_reason = final_state_raw.get("skip_reason", "unknown")
+                logger.info(f"debate_skipped ticker={ticker} reason={skip_reason}")
+                if on_message:
+                    await on_message(_skip_message(ticker, skip_reason))
+                await self._finalize_debate_trace(debate_run_id=debate_run_id, status="skipped")
+                return None
 
             # The final state is a dict representing the AnalystState
             if 'verdict' in final_state_raw and final_state_raw['verdict']:

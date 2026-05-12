@@ -6,11 +6,16 @@ This document details the proposed architectural improvements for the xalpha-res
 
 ## 1. Architectural Improvements
 
-### 1.1 The "Gatekeeper" Filter (L0 Defense)
+### 1.1 The "Gatekeeper" Filter (L0 Defense) — ✅ Implemented
 
 - **Problem**: Every signal triggers a full LLM workflow, even for "junk" stocks.
-- **Solution**: A hard-rule node to reject tickers with low liquidity (<100k avg vol) or low market cap (<100B VND).
-- **Benefit**: 100% token saving for non-viable candidates.
+- **Solution**: `gatekeeper_node` — the first LangGraph node in the debate graph. Runs 5 rule-based SQL checks and short-circuits to END before any LLM call.
+  - WARN_LIST: admin-blocked tickers
+  - NO_COMPANY_DATA: ticker absent from `company_profiles`
+  - LOW_MARKET_CAP: `market_cap < 100B VND` (configurable via `GATEKEEPER__MIN_MARKET_CAP`)
+  - LOW_VOLUME: 30-day avg volume `< 100K shares/day` (configurable via `GATEKEEPER__MIN_AVG_VOLUME_30D`)
+  - CACHE_HIT: a same-day high-confidence verdict already exists (`confidence >= 70`, configurable via `GATEKEEPER__CACHE_CONFIDENCE_THRESHOLD`)
+- **Benefit**: 100% token saving for non-viable candidates. `DebateTrace` is finalized as `"skipped"` with a Vietnamese skip message surfaced to the caller.
 
 ### 1.2 Structured Information Contract
 

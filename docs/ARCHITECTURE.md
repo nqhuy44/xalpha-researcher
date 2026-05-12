@@ -32,7 +32,6 @@ graph TB
     end
 
     subgraph "Agent Layer (Planned)"
-        GK["Gatekeeper Agent<br/>L0 Rule-based Filter"]
         SA["Signal Agent<br/>CANSLIM + Technical"]
         PA["Portfolio Agent<br/>Advisory & Risk Framework"]
     end
@@ -100,8 +99,8 @@ Each application service uses the **same Docker image** (`nqh44/xalpha-researche
 | **Config** | `src/config/` | ✅ Implemented | Pydantic-based settings from environment variables |
 | **News Agent** | `src/agents/news/` | ✅ Implemented | RSS collection, HTML scraping, LLM summarization, Telegram reporting |
 | **Financial Agent** | `src/agents/financial/` | ✅ Implemented | vnstock data sync (EOD, profiles, financials, market intelligence) |
-| **Analyst Agent** | `src/agents/analyst/` | ✅ Implemented | LangGraph-based Bull vs Bear adversarial debate |
-| **Gatekeeper Agent** | `src/agents/gatekeeper/` | 🔲 Planned | L0 Rule-based filter (Liquidity, Market Cap) |
+| **Analyst Agent** | `src/agents/analyst/` | ✅ Implemented | LangGraph-based Bull vs Bear adversarial debate with L0 Gatekeeper |
+| **Gatekeeper Node** | `src/agents/analyst/nodes/gatekeeper_node.py` | ✅ Implemented | L0 rule-based filter: warn-list, market-cap ≥ 100B VND, 30d avg-vol ≥ 100K shares, same-day cache-hit check. Wired as the first LangGraph node before `data_aggregator`; short-circuits to END on failure. |
 | **Signal Agent** | `src/agents/signal/` | 🔲 Planned | CANSLIM scoring, technical analysis |
 | **Portfolio Agent** | `src/agents/portfolio/` | 🔲 Planned | Advisory recommendations, Risk constraint evaluation, No execution |
 | **Data Sources** | `src/data/sources/` | ✅ Implemented | RSS, vnstock, HTML scraper connectors |

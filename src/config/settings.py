@@ -140,6 +140,14 @@ class ApiSettings(BaseModel):
     admin_password: str = "" # Simple string comparison
 
 
+class GatekeeperSettings(BaseModel):
+    """L0 Gatekeeper filter thresholds. Skips the full debate for unqualified tickers."""
+    min_market_cap: int = 100_000_000_000  # 100B VND
+    min_avg_volume_30d: int = 100_000       # shares/day
+    cache_confidence_threshold: int = 70    # reuse today's verdict if confidence >= this
+    warn_list: List[str] = Field(default_factory=list)  # tickers hard-blocked by admin
+
+
 class DebateSettings(BaseModel):
     """Debate Engine settings."""
     max_rebuttals: int = 1
@@ -173,6 +181,7 @@ class AppSettings(BaseSettings):
     vnstock: VnstockSettings = VnstockSettings()
     api: ApiSettings = ApiSettings()
     debate: DebateSettings = DebateSettings()
+    gatekeeper: GatekeeperSettings = GatekeeperSettings()
 
 
 # Singleton instance

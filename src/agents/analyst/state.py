@@ -3,6 +3,15 @@ from typing import Annotated, Dict, Any, List, Literal, Optional
 from pydantic import BaseModel, Field
 import operator
 
+# Machine-readable skip codes emitted by the Gatekeeper node.
+SkipReason = Literal[
+    "WARN_LIST",        # ticker hard-blocked by admin
+    "LOW_MARKET_CAP",   # market_cap below threshold
+    "LOW_VOLUME",       # 30-day avg volume below threshold
+    "CACHE_HIT",        # a fresh high-confidence verdict already exists today
+    "NO_COMPANY_DATA",  # ticker not found in DB — cannot evaluate qualifications
+]
+
 # Slot 1-4 are shared by both sides; slot 5 is CATALYST for Bull, STRUCTURAL for Bear.
 ArgumentType = Literal["MACRO", "SECTOR", "FUNDAMENTAL", "TECHNICAL", "CATALYST", "STRUCTURAL"]
 
@@ -117,3 +126,7 @@ class AnalystState(BaseModel):
     verdict: Optional[Verdict] = None
     referee_decision: Optional[RefereeDecision] = None
     referee_history: Annotated[List[RefereeDecision], operator.add] = Field(default_factory=list)
+
+    # Gatekeeper result — set by gatekeeper_node before any LLM work.
+    gatekeeper_passed: bool = True
+    skip_reason: Optional[SkipReason] = None

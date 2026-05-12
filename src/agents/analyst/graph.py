@@ -2,6 +2,7 @@ import logging
 from langgraph.graph import StateGraph, START, END
 
 from src.agents.analyst.state import AnalystState
+from src.agents.analyst.nodes.gatekeeper_node import gatekeeper_node
 from src.agents.analyst.nodes.data_aggregator import aggregate_data_node
 from src.agents.analyst.nodes.bull_agent import bull_agent_node
 from src.agents.analyst.nodes.bear_agent import bear_agent_node
@@ -9,6 +10,13 @@ from src.agents.analyst.nodes.judge_agent import judge_agent_node
 from src.agents.analyst.nodes.referee_agent import referee_agent_node
 
 logger = logging.getLogger(__name__)
+
+def gatekeeper_router(state: AnalystState):
+    """Short-circuit to END when the ticker doesn't pass L0 checks."""
+    if not state.gatekeeper_passed:
+        return END
+    return "data_aggregator"
+
 
 def join_node(state: AnalystState) -> dict:
     """Dummy node to join the parallel edges and increment round."""
@@ -84,6 +92,7 @@ def post_referee_router(state: AnalystState):
 workflow = StateGraph(AnalystState)
 
 # 2. Add Nodes
+workflow.add_node("gatekeeper", gatekeeper_node)
 workflow.add_node("data_aggregator", aggregate_data_node)
 workflow.add_node("bull", bull_agent_node)
 workflow.add_node("bear", bear_agent_node)
@@ -92,7 +101,8 @@ workflow.add_node("judge", judge_agent_node)
 workflow.add_node("referee", referee_agent_node)
 
 # 3. Define Edges (Flow)
-workflow.add_edge(START, "data_aggregator")
+workflow.add_edge(START, "gatekeeper")
+workflow.add_conditional_edges("gatekeeper", gatekeeper_router)
 
 # Fan-out to both agents
 workflow.add_edge("data_aggregator", "bull")

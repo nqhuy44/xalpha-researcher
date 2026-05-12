@@ -14,20 +14,31 @@ Handles the ingestion of qualitative data, sentiment analysis, and storage for R
 (Reports)           (Stage 2)               (Stage 1)
 ```
 
-## 2. L0 Gatekeeper Flow (🔲 Planned Roadmap)
-Initial rule-based filter to prevent waste of LLM tokens.
+## 2. L0 Gatekeeper Flow (✅ Implemented)
+Rule-based LangGraph node (`gatekeeper_node`) that runs before `data_aggregator`.
+Configured via `GATEKEEPER__*` env vars (`GatekeeperSettings` in `src/config/settings.py`).
 
 ```text
-[ Raw Signal ]
-      |
-      v
-{ Rule Check } -----------------> [ ABORT ]
-      |                           (Low Liquidity,
-      v                           Low Market Cap,
-[ PROCEED ]                       Warning List)
-      |
-      v
-[ Signal Generation Layer ]
+[ Raw Signal / ticker ]
+         |
+         v
+  +-------------------+
+  |  gatekeeper_node  |
+  +---------+---------+
+            |
+  Checks (in order, short-circuit on first failure):
+    1. WARN_LIST        — admin-blocked tickers
+    2. NO_COMPANY_DATA  — ticker absent from company_profiles
+    3. LOW_MARKET_CAP   — market_cap < 100B VND (configurable)
+    4. LOW_VOLUME       — 30d avg vol < 100K shares (configurable)
+    5. CACHE_HIT        — same-day verdict already exists with
+                          confidence >= cache_confidence_threshold (70)
+            |
+     Pass --+-- Fail
+      |              |
+      v              v
+[ data_aggregator ]  [ END ]  (gatekeeper_passed=False, skip_reason set,
+                               DebateTrace finalized as "skipped")
 ```
 
 ## 3. Signal Generation Flow
@@ -55,6 +66,13 @@ Adversarial reasoning state-machine implemented via **LangGraph**.
    Create debate_traces row       (status="running", debate_run_id assigned)
            |
            v
+   +-------------------+
+   |  gatekeeper_node  | (L0 rule checks — see §2 above)
+   +---------+---------+
+             |
+      Pass --+-- Fail --> END  (trace finalized as "skipped", None returned)
+             |
+             v
    +-------------------+
    |  Data Aggregator  | (Context Building: EOD + News + Reports)
    +---------+---------+
@@ -99,7 +117,9 @@ Adversarial reasoning state-machine implemented via **LangGraph**.
 
 | From Node | To Node | Condition | Responsibility |
 |---|---|---|---|
-| `START` | `data_aggregator` | Always | Fetch all metadata from PostgreSQL/Redis |
+| `START` | `gatekeeper` | Always | L0 rule-based filter before any LLM work |
+| `gatekeeper` | `data_aggregator` | `gatekeeper_passed == True` | All checks pass — proceed to context building |
+| `gatekeeper` | `END` | `gatekeeper_passed == False` | Short-circuit; trace marked "skipped" |
 | `data_aggregator` | `bull`, `bear` | Always | Parallel execution of personas |
 | `bull`, `bear` | `join` | Always | Sync parallel results into shared state |
 | `join` | `bull`, `bear` | `current_round <= max_rebuttals` | Loop for additional rebuttal rounds |

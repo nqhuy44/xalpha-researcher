@@ -86,10 +86,8 @@ These contradict the documented design and silently waste tokens or miscompute. 
 
 ## 2. Token-saving — Tier 1 (highest ROI, do these next)
 
-- [ ] **T1. Implement L0 Gatekeeper.** (Promised in `docs/MULTI_AGENT_DESIGN.md`, `docs/FLOWS.md` §2.)
-  - Pre-debate SQL filter: `market_cap < 100B VND`, `30d avg vol < 100k`, ticker in warn-list, debate already exists for `(ticker, today)` with confidence ≥ threshold.
-  - Wire as a node before `data_aggregator` that returns early-stop with a "skipped" verdict.
-  - Impact: 100% saving for rejected tickers + cache hits. Effort: M.
+- [x] **T1. Implement L0 Gatekeeper.** *(implemented 2026-05-12)*
+  - `src/agents/analyst/nodes/gatekeeper_node.py` — 5 SQL checks: WARN_LIST (settings), NO_COMPANY_DATA, LOW_MARKET_CAP (< 100B VND), LOW_VOLUME (30d avg < 100k shares/day), CACHE_HIT (active verdict today with confidence ≥ threshold). Wired as first node in `graph.py` via `gatekeeper_router` → `data_aggregator` or `END`. `AnalystState` gains `gatekeeper_passed` + `skip_reason` fields. Engine detects skip, sends Vietnamese user message via `on_message` callback, finalizes `DebateTrace` with `status="skipped"`. `GatekeeperSettings` added to `settings.py` (all thresholds env-configurable). Impact: 100% token saving for rejected tickers + cache hits. Effort: M.
 
 - [ ] **T2. Verdict cache (per ticker, per market session).**
   - File: new short-circuit at `src/agents/analyst/engine.py:32` (before graph invoke).
