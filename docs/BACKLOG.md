@@ -222,10 +222,8 @@ These contradict the documented design and silently waste tokens or miscompute. 
   - `pgvector` is in dependencies but unused. Embed news at ingest; cosine-search top-K against `(company_name + ticker + sector + product_keywords)`.
   - Replaces brittle `ILIKE`; improves analyst quality AND reduces token count (10 truly relevant items > 30 LIKE-matched). Effort: L. Depends on: B4.
 
-- [ ] **I2. Per-call token logging table.**
-  - File: new `llm_usage` table + wrapper in `src/services/llm/__init__.py`.
-  - Gemini returns `usage_metadata.prompt_token_count` / `candidates_token_count`. Persist `(ts, ticker, node, role, model, input_tok, output_tok, cached_tok, latency_ms, status)`.
-  - **Do this before further optimization** — you can't tell which node burns the most without it. Effort: S.
+- [x] **I2. Per-call token logging table.** *(implemented 2026-05-12)*
+  - `src/db/models/observability.py` (`LLMUsage`), migration `9f3a2e1d4c8b`. `LLMService.generate_structured` now accepts optional `ticker/node/debate_run_id`, measures latency, fires-and-forgets a DB write. Gemini `usage_metadata` captured; OpenAI/Claude token fields also captured. All 5 debate+portfolio nodes pass context. Effort: S.
 
 - [ ] **I3. Debate verdict diff vs prior verdict.**
   - File: `src/data/persistence/verdict_repo.py`.
@@ -313,13 +311,11 @@ These contradict the documented design and silently waste tokens or miscompute. 
 
 ## 7. Observability prerequisites (do early, unblocks the rest)
 
-- [ ] **O1. I2 token-usage table** *(duplicate of I2 — do once)*.
-- [ ] **O2. Structured trace per debate run.**
-  - One row per debate with total tokens, total cost (computed from a price table), per-node breakdown, total latency, retries.
-  - Drives a "Cost per ticker" dashboard tile.
-  - Effort: M. Depends on: I2.
-- [ ] **O3. Alert when a single debate exceeds a token budget** (e.g., 200K input tokens). Cheap canary for prompt regressions.
-  - Effort: S. Depends on: O2.
+- [x] **O1. I2 token-usage table** *(done with I2 — 2026-05-12)*.
+- [x] **O2. Structured trace per debate run.** *(implemented 2026-05-12)*
+  - `DebateTrace` model in `src/db/models/observability.py`. `DebateEngine._create_debate_trace` inserts a `running` row before the graph; `_finalize_debate_trace` aggregates `llm_usage` rows into totals + node breakdown + cost estimate (price table in `engine.py`), marks `completed`/`failed`. `AnalystState.debate_run_id` threads the ID through the graph to every node. Effort: M.
+- [x] **O3. Alert when a single debate exceeds a token budget.** *(implemented 2026-05-12)*
+  - `DEBATE_INPUT_TOKEN_BUDGET = 200_000` constant in `engine.py`. `_finalize_debate_trace` emits `logger.warning("debate_token_budget_exceeded", ...)` with overage detail when total input tokens exceed the limit. Effort: S.
 
 ---
 

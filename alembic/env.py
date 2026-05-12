@@ -25,6 +25,7 @@ import src.db.models.news
 import src.db.models.finance  # Ensure models are registered
 import src.db.models.portfolio  # Register Portfolio position
 import src.db.models.analyst    # Register Analyst models
+import src.db.models.observability  # Register observability models
 from src.config.settings import settings
 
 # add your model's MetaData object here

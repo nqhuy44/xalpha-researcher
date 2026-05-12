@@ -53,7 +53,10 @@ async def portfolio_manager_node(state: PortfolioState) -> Dict[str, Any]:
     human_message = f"Based on the signal and portfolio context, propose a trade for {state.ticker}."
     
     try:
-        proposed_trade = await llm.generate_structured(system_prompt, human_message, TradeAction, role="judge", agent_name="portfolio_manager")
+        proposed_trade = await llm.generate_structured(
+            system_prompt, human_message, TradeAction, role="judge", agent_name="portfolio_manager",
+            ticker=state.ticker, node="portfolio_manager",
+        )
         
         # Override fields to ensure consistency
         proposed_trade.symbol = state.ticker

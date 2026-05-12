@@ -49,7 +49,10 @@ Processes quantitative financial data to produce high-probability trading signal
 Adversarial reasoning state-machine implemented via **LangGraph**.
 
 ```text
-       [ START ]
+   [ DebateEngine.analyze ]
+           |
+           v
+   Create debate_traces row       (status="running", debate_run_id assigned)
            |
            v
    +-------------------+
@@ -59,7 +62,7 @@ Adversarial reasoning state-machine implemented via **LangGraph**.
     +--------+--------+      (Parallel Fan-out)
     |                 |
     v                 v
-[ Bull Agent ]   [ Bear Agent ]
+[ Bull Agent ]   [ Bear Agent ]   <-- each call logs to llm_usage (debate_run_id)
 (Pro-Thesis)     (Anti-Thesis)
     |                 |
     +--------+--------+      (Parallel Fan-in)
@@ -75,11 +78,21 @@ Adversarial reasoning state-machine implemented via **LangGraph**.
     (YES)        \                |
      /            \               |
     v              +--------------+
-[ Judge Agent ]
+[ Judge Agent ]                       <-- logs to llm_usage
 (Consensus & Verdict)
     |
     v
-  [ END ]
+{ Confidence < 75 OR retry? }
+    |
+    v
+[ Referee Agent ]                     <-- logs to llm_usage (conditional)
+    |
+    v
+   [ END ]
+           |
+           v
+   Finalize debate_traces row    (aggregate totals, node_breakdown, cost_usd)
+   O3 alert if input_tokens > 200K
 ```
 
 ### 3.1 LangGraph State Transitions

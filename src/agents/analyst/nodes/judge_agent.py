@@ -34,7 +34,10 @@ async def judge_agent_node(state: AnalystState) -> Dict[str, Any]:
     user_prompt += "Render your final Verdict."
     
     try:
-        verdict = await llm.generate_structured(system_prompt, user_prompt, Verdict, role="judge", agent_name="judge")
+        verdict = await llm.generate_structured(
+            system_prompt, user_prompt, Verdict, role="judge", agent_name="judge",
+            ticker=state.ticker, node="judge", debate_run_id=state.debate_run_id,
+        )
         logger.info(f"Judge rendered verdict with confidence {verdict.confidence_score}%")
         # Increment attempt counter
         return {"verdict": verdict, "judge_attempts": state.judge_attempts + 1}

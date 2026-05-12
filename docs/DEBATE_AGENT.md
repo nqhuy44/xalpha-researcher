@@ -81,6 +81,7 @@ The debate is governed by the `AnalystState` ([state.py](file:///home/nqhuy/nqhu
 - `current_round` / `max_rounds`: Loop control. `max_rounds` is set by `DebateEngine` from its `max_rebuttals` constructor arg (`max_rounds = max_rebuttals + 1`, since round 1 is the opening).
 - `judge_attempts` / `max_judge_attempts`: Number of *completed* judge runs (starts at 0) and the cap (default 2 = 1 initial + 1 retry). Drives the Referee retry loop.
 - `verdict` / `referee_decision` / `referee_history`: Latest Judge output, latest Referee decision, and the full sequence of Referee decisions across retries.
+- `debate_run_id`: UUID string set by `DebateEngine` before graph invocation. All `LLMService.generate_structured` calls in every node tag their `llm_usage` rows with this ID, linking them to the corresponding `debate_traces` row for cost aggregation (O2).
 
 ### Argument Schema (Bull/Bear opening output)
 Used in round 1. Both sides produce the **same** Pydantic shape; only the prompt differs.
@@ -117,6 +118,7 @@ The final structured output from the Judge:
 | `judge_agent.py` | Impartial arbiter using high-reasoning Gemini models. |
 | `referee_agent.py` | Safety verification layer that critically audits the judge's verdict for logic flaws and hallucinations. Runs conditionally to save tokens. |
 | `report_generator.py` | Converts the debate state into a modern responsive HTML report. |
+| `engine.py` | `DebateEngine` facade: generates `debate_run_id`, creates a `debate_traces` row (`status="running"`) before graph start, finalizes it (`status="completed"/"failed"`) with aggregated token counts and cost estimate after the graph exits. Emits O3 budget alert (`debate_token_budget_exceeded`) when total input tokens exceed `DEBATE_INPUT_TOKEN_BUDGET = 200_000`. |
 
 ## 6. Model Usage
 
