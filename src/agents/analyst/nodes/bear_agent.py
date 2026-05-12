@@ -31,6 +31,7 @@ async def bear_agent_node(state: AnalystState) -> Dict[str, Any]:
         )
         response = await llm.generate_structured(
             system_prompt, user_prompt, BearOpeningOutput, role="deep", agent_name="bear",
+            ticker=state.ticker, node="bear_opening", debate_run_id=state.debate_run_id,
         )
         return {"rounds": [DebateRound(round_number=1, bear_arguments=response.arguments)]}
 
@@ -54,6 +55,7 @@ async def bear_agent_node(state: AnalystState) -> Dict[str, Any]:
     )
     response = await llm.generate_structured(
         system_prompt, user_prompt, BearRebuttalOutput, role="deep", agent_name="bear",
+        ticker=state.ticker, node="bear_rebuttal", debate_run_id=state.debate_run_id,
     )
     return {
         "rounds": [

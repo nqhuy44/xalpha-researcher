@@ -6,7 +6,7 @@ from anthropic import AsyncAnthropic
 from pydantic import BaseModel
 from tenacity import retry, wait_exponential, stop_after_attempt
 
-from src.services.llm.provider import LLMProvider
+from src.services.llm.provider import LLMProvider, UsageDict
 
 logger = structlog.get_logger(__name__)
 
@@ -42,15 +42,10 @@ class ClaudeProvider(LLMProvider):
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),
     )
-    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: type, model: str, temperature: Optional[float] = None) -> Any:
+    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: type, model: str, temperature: Optional[float] = None) -> Tuple[Any, UsageDict]:
         if not self.client:
             raise RuntimeError("Claude client not initialized.")
-            
-        # Claude 3+ supports tool use for structured extraction
-        # But for simplicity and consistency with other providers, we use a prompt-based approach
-        # with a clear instruction to return JSON.
-        
-        # Note: Claude works better with system prompts in the dedicated field
+
         response = await self.client.messages.create(
             model=model,
             max_tokens=4096,
@@ -60,16 +55,21 @@ class ClaudeProvider(LLMProvider):
                 {"role": "user", "content": user_prompt + "\n\nIMPORTANT: Return ONLY valid JSON matching the schema. No conversational filler or backticks."}
             ]
         )
-        
+
         content = response.content[0].text.strip()
-        
-        # Simple JSON extract in case it includes markdown
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
-            
-        return response_schema.model_validate_json(content)
+
+        result = response_schema.model_validate_json(content)
+
+        usage: UsageDict = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
+        if response.usage:
+            usage["input_tokens"] = response.usage.input_tokens or 0
+            usage["output_tokens"] = response.usage.output_tokens or 0
+
+        return result, usage
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),

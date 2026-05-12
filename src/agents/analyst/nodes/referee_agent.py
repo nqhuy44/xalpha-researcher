@@ -37,11 +37,12 @@ async def referee_agent_node(state: AnalystState) -> Dict[str, Any]:
         # Note: we use "judge" role here for high-quality deep reasoning, 
         # but allow agent overrides explicitly named "referee" if configured.
         decision = await llm.generate_structured(
-            system_prompt, 
-            user_prompt, 
-            RefereeDecision, 
-            role="judge", 
-            agent_name="referee"
+            system_prompt,
+            user_prompt,
+            RefereeDecision,
+            role="judge",
+            agent_name="referee",
+            ticker=state.ticker, node="referee", debate_run_id=state.debate_run_id,
         )
         logger.info(f"Referee action: {decision.action} | Valid: {decision.is_valid}")
         return {"referee_decision": decision, "referee_history": [decision]}

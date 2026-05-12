@@ -104,6 +104,7 @@ class AnalystState(BaseModel):
     ticker: str
     company_name: str
     context: str = Field(default="", description="The extremely detailed text block containing EOD, financials, and news.")
+    debate_run_id: Optional[str] = Field(default=None, description="UUID string linking all LLM calls in this debate run to a DebateTrace row.")
     
     # State accumulated across nodes
     rounds: Annotated[List[DebateRound], operator.add] = Field(default_factory=list)

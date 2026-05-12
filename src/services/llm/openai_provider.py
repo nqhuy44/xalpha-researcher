@@ -5,7 +5,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
-from src.services.llm.provider import LLMProvider
+from src.services.llm.provider import LLMProvider, UsageDict
 
 logger = structlog.get_logger(__name__)
 
@@ -75,10 +75,10 @@ class OpenAIProvider(LLMProvider):
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),
     )
-    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: type, model: str, temperature: Optional[float] = None) -> Any:
+    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: type, model: str, temperature: Optional[float] = None) -> Tuple[Any, UsageDict]:
         if not self.client:
             raise RuntimeError("OpenAI client not initialized.")
-            
+
         response = await self._create_completion(
             model=model,
             messages=[
@@ -88,9 +88,16 @@ class OpenAIProvider(LLMProvider):
             temperature=temperature,
             response_format={"type": "json_object"}
         )
-        
+
         content = response.choices[0].message.content
-        return response_schema.model_validate_json(content)
+        result = response_schema.model_validate_json(content)
+
+        usage: UsageDict = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
+        if response.usage:
+            usage["input_tokens"] = response.usage.prompt_tokens or 0
+            usage["output_tokens"] = response.usage.completion_tokens or 0
+
+        return result, usage
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),

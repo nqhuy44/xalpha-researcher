@@ -106,8 +106,9 @@ Each application service uses the **same Docker image** (`nqh44/xalpha-researche
 | **Portfolio Agent** | `src/agents/portfolio/` | 🔲 Planned | Advisory recommendations, Risk constraint evaluation, No execution |
 | **Data Sources** | `src/data/sources/` | ✅ Implemented | RSS, vnstock, HTML scraper connectors |
 | **Data Persistence** | `src/data/persistence/` | ✅ Implemented | Repository pattern for all DB operations |
-| **DB Models** | `src/db/models/` | ✅ Implemented | SQLAlchemy ORM models (News, Finance, Company) |
-| **LLM Service** | `src/services/llm.py` | ✅ Implemented | Two-stage Gemini pipeline (summarize + synthesize) |
+| **DB Models** | `src/db/models/` | ✅ Implemented | SQLAlchemy ORM models (News, Finance, Company, Observability) |
+| **LLM Service** | `src/services/llm/` | ✅ Implemented | Two-stage Gemini pipeline (summarize + synthesize); per-call token logging |
+| **Observability** | `src/db/models/observability.py` | ✅ Implemented | `llm_usage` (per-call token counts) + `debate_traces` (per-debate aggregates, cost, node breakdown) |
 | **Telegram Bot** | `src/interfaces/telegram/` | ✅ Implemented | Standalone polling bot with `/news`, `/status` commands |
 
 ## Design Patterns
@@ -122,6 +123,7 @@ Each application service uses the **same Docker image** (`nqh44/xalpha-researche
 | **Two-Stage LLM** | Flash-Lite for bulk extraction, Flash for synthesis (91% cost savings vs Pro) |
 | **Local Fallback** | Local Qwen 3.5 handles 60% of baseline article summarization |
 | **Graceful Degradation** | All API calls wrapped with retry + fallback to None |
+| **Observability** | Every `generate_structured` call logs a `llm_usage` row (fire-and-forget). `DebateEngine` wraps each graph run in a `debate_traces` row with aggregated totals and per-node breakdown. O3 budget alert fires when input tokens exceed 200 K. |
 
 ## 3-Layer Risk Architecture
 

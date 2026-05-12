@@ -2,9 +2,10 @@
 LLM Service — Model-Agnostic Router and Provider Factory.
 """
 
-import json
 import asyncio
 import logging
+import time
+import uuid
 from pathlib import Path
 from typing import Any, List, Optional, Tuple, Dict
 import structlog
@@ -175,7 +176,81 @@ class LLMService:
         
         return await provider.generate_text(prompt, model)
 
-    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: type, role: str = "deep", agent_name: Optional[str] = None) -> Any:
-        """Generic structured output generation based on role and agent name."""
+    async def generate_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: type,
+        role: str = "deep",
+        agent_name: Optional[str] = None,
+        ticker: Optional[str] = None,
+        node: Optional[str] = None,
+        debate_run_id: Optional[str] = None,
+    ) -> Any:
+        """Generic structured output generation. Logs per-call token usage to llm_usage table."""
         provider, model = self.get_provider_and_model(role, agent_name=agent_name)
-        return await provider.generate_structured(system_prompt, user_prompt, response_schema, model)
+        provider_name = type(provider).__name__.replace("Provider", "").lower()
+
+        t0 = time.monotonic()
+        status = "success"
+        try:
+            result, usage = await provider.generate_structured(system_prompt, user_prompt, response_schema, model)
+            return result
+        except Exception:
+            status = "error"
+            raise
+        finally:
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            asyncio.ensure_future(
+                self._persist_usage(
+                    debate_run_id=debate_run_id,
+                    ticker=ticker,
+                    node=node or agent_name,
+                    role=role,
+                    provider=provider_name,
+                    model=model,
+                    input_tokens=usage.get("input_tokens", 0) if status == "success" else 0,
+                    output_tokens=usage.get("output_tokens", 0) if status == "success" else 0,
+                    cached_tokens=usage.get("cached_tokens", 0) if status == "success" else 0,
+                    latency_ms=latency_ms,
+                    status=status,
+                )
+            )
+
+    @staticmethod
+    async def _persist_usage(
+        debate_run_id: Optional[str],
+        ticker: Optional[str],
+        node: Optional[str],
+        role: str,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cached_tokens: int,
+        latency_ms: int,
+        status: str,
+    ) -> None:
+        """Fire-and-forget: write one LLMUsage row. Never raises."""
+        try:
+            from src.db.session import async_session_factory
+            from src.db.models.observability import LLMUsage
+            run_uuid = uuid.UUID(debate_run_id) if debate_run_id else None
+            async with async_session_factory() as session:
+                row = LLMUsage(
+                    debate_run_id=run_uuid,
+                    ticker=ticker,
+                    node=node,
+                    role=role,
+                    provider=provider,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cached_tokens=cached_tokens,
+                    latency_ms=latency_ms,
+                    status=status,
+                )
+                session.add(row)
+                await session.commit()
+        except Exception as exc:
+            logger.warning("llm_usage_persist_failed", error=str(exc))

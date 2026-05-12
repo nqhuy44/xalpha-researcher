@@ -23,6 +23,8 @@ erDiagram
 
     NEWS_ARTICLE ||--o{ SENTIMENT_SCORE : has
     DEBATE_VERDICT ||--o{ DEBATE_RECORD : generated_from
+    DEBATE_VERDICT ||--o| DEBATE_TRACE : traced_by
+    DEBATE_TRACE ||--o{ LLM_USAGE : contains
 
     PORTFOLIO_POSITIONS }o--|| COMPANY : references
 
@@ -141,6 +143,38 @@ erDiagram
         timestamp updated_at
     }
 
+    DEBATE_TRACE {
+        uuid id PK
+        varchar ticker
+        timestamp started_at
+        timestamp finished_at
+        int total_input_tokens
+        int total_output_tokens
+        int total_cached_tokens
+        float total_cost_usd
+        int total_latency_ms
+        int total_llm_calls
+        jsonb node_breakdown
+        varchar status
+        uuid verdict_id FK
+    }
+
+    LLM_USAGE {
+        uuid id PK
+        timestamp ts
+        uuid debate_run_id FK
+        varchar ticker
+        varchar node
+        varchar role
+        varchar provider
+        varchar model
+        int input_tokens
+        int output_tokens
+        int cached_tokens
+        int latency_ms
+        varchar status
+    }
+
     COMPANY ||--o{ FINANCIAL_REPORT : has
     COMPANY ||--o{ STOCK_EOD : has
     COMPANY ||--o{ STOCK_TRADING_STATS : has
@@ -161,6 +195,11 @@ erDiagram
 | `debate_verdicts` | `(ticker, is_active)` | Composite B-tree | Active verdict lookup |
 | `agent_analysis` | `(company_id, created_at)` | Composite B-tree | Analysis history |
 | `alert` | `(portfolio_id, delivered)` | Composite B-tree | Undelivered alert queue |
+| `debate_traces` | `ticker` | B-tree | Per-ticker cost history |
+| `debate_traces` | `started_at` | B-tree | Chronological trace queries |
+| `llm_usage` | `ts` | B-tree | Chronological call log |
+| `llm_usage` | `ticker` | B-tree | Per-ticker usage queries |
+| `llm_usage` | `debate_run_id` | B-tree | Aggregation by debate run |
 
 ## Redis Cache Patterns
 

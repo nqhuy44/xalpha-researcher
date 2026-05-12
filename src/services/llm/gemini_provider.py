@@ -1,11 +1,11 @@
 import structlog
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
-from src.services.llm.provider import LLMProvider
+from src.services.llm.provider import LLMProvider, UsageDict
 
 logger = structlog.get_logger(__name__)
 
@@ -44,12 +44,12 @@ class GeminiProvider(LLMProvider):
         stop=stop_after_attempt(3),
         retry=retry_if_exception_type(APIError),
     )
-    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: type, model: str, temperature: Optional[float] = None) -> Any:
+    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: type, model: str, temperature: Optional[float] = None) -> Tuple[Any, UsageDict]:
         if not self.client:
             raise RuntimeError("Gemini client not initialized (missing API key).")
-            
+
         full_prompt = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER PROMPT:\n{user_prompt}"
-        
+
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=response_schema,
@@ -62,11 +62,17 @@ class GeminiProvider(LLMProvider):
             contents=full_prompt,
             config=config,
         )
-        
+
         parsed = response.parsed
-        if isinstance(parsed, dict):
-            return response_schema(**parsed)
-        return parsed
+        result = response_schema(**parsed) if isinstance(parsed, dict) else parsed
+
+        usage: UsageDict = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
+        if response.usage_metadata:
+            usage["input_tokens"] = response.usage_metadata.prompt_token_count or 0
+            usage["output_tokens"] = response.usage_metadata.candidates_token_count or 0
+            usage["cached_tokens"] = response.usage_metadata.cached_content_token_count or 0
+
+        return result, usage
 
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),
